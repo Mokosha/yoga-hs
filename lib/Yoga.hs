@@ -31,6 +31,12 @@ instance Foldable Layout where
   foldl f init (Layout cs x _) = foldl (foldl f) (f init x) cs
   foldr f init (Layout cs x _) = f x $ foldr (flip $ foldr f) init cs
 
+instance Traversable Layout where
+  traverse f (Layout cs x ptr) =
+    Layout <$> (sequenceA $ traverse f <$> cs) <*> f x <*> pure ptr
+  sequenceA (Layout cs x ptr) =
+    pure (\x' cs' -> Layout cs' x' ptr) <*> x <*> sequenceA (sequenceA <$> cs)
+
 data Direction
   = Inherit
   | LeftToRight
