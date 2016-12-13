@@ -26,24 +26,24 @@ import System.IO.Unsafe
 --------------------------------------------------------------------------------
 
 data Layout a =
-  Layout { children :: [Layout a],
-           payload :: a,
+  Layout { payload :: a,
+           children :: [Layout a],
            internalPtr :: ForeignPtr C'YGNode
          }
 
 instance Functor Layout where
-  fmap f (Layout cs x ptr) = Layout (fmap (fmap f) cs) (f x) ptr
+  fmap f (Layout x cs ptr) = Layout (f x) (fmap (fmap f) cs) ptr
 
 instance Foldable Layout where
-  foldMap f (Layout cs x _) = f x `mappend` (foldMap (foldMap f) cs)
-  foldl f z (Layout cs x _) = foldl (foldl f) (f z x) cs
-  foldr f z (Layout cs x _) = f x $ foldr (flip $ foldr f) z cs
+  foldMap f (Layout x cs _) = f x `mappend` (foldMap (foldMap f) cs)
+  foldl f z (Layout x cs _) = foldl (foldl f) (f z x) cs
+  foldr f z (Layout x cs _) = f x $ foldr (flip $ foldr f) z cs
 
 instance Traversable Layout where
-  traverse f (Layout cs x ptr) =
-    Layout <$> (sequenceA $ traverse f <$> cs) <*> f x <*> pure ptr
-  sequenceA (Layout cs x ptr) =
-    pure (\x' cs' -> Layout cs' x' ptr) <*> x <*> sequenceA (sequenceA <$> cs)
+  traverse f (Layout x cs ptr) =
+    Layout <$> f x <*> (sequenceA $ traverse f <$> cs) <*> pure ptr
+  sequenceA (Layout x cs ptr) =
+    Layout <$> x <*> sequenceA (sequenceA <$> cs) <*> pure ptr
 
 data Direction
   = Inherit
@@ -93,7 +93,7 @@ data Edge
 mkNode :: a -> Layout a
 mkNode x = unsafePerformIO $ do
   ptr <- c'YGNodeNew
-  Layout [] x <$> newForeignPtr p'YGNodeFree ptr
+  Layout x [] <$> newForeignPtr p'YGNodeFree ptr
 
 mkContainer :: a -> [Layout a] -> Layout a
 mkContainer x cs = unsafePerformIO $ do
@@ -101,12 +101,12 @@ mkContainer x cs = unsafePerformIO $ do
   forM_ (zip cs [0..]) $ \(child, idx) ->
     withForeignPtr (internalPtr child) $ \childPtr ->
     c'YGNodeInsertChild ptr childPtr idx
-  Layout cs x <$> newForeignPtr p'YGNodeFree ptr
+  Layout x cs <$> newForeignPtr p'YGNodeFree ptr
 
 type RenderFn m a b = (Float, Float) -> (Float, Float) -> a -> m b
 
 renderTree :: Monad m => Layout a -> RenderFn m a b -> m (Layout b)
-renderTree (Layout cs x ptr) f = do
+renderTree (Layout x cs ptr) f = do
   let cf = realToFrac :: CFloat -> Float
   let getLayout lytFn = return $ cf $ unsafePerformIO $ withForeignPtr ptr lytFn
   left <- getLayout c'YGNodeLayoutGetLeft
@@ -114,8 +114,8 @@ renderTree (Layout cs x ptr) f = do
   width <- getLayout c'YGNodeLayoutGetWidth
   height <- getLayout c'YGNodeLayoutGetHeight
   Layout
-    <$> mapM (flip renderTree f) cs
-    <*> f (left, top) (width, height) x
+    <$> f (left, top) (width, height) x
+    <*> mapM (flip renderTree f) cs
     <*> pure ptr
 
 render :: Monad m => Layout a -> RenderFn m a b -> m (Layout b)
