@@ -6,6 +6,5 @@ import Yoga as Yoga
 
 main :: IO ()
 main = do
-  node <- newNode
-  resetNode node
+  let node = mkNode "Node A: "
   putStrLn "I did it!"
