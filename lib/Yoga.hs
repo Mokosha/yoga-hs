@@ -7,7 +7,7 @@ module Yoga (
   PositionType(..), Overflow(..), Edge(..),
 
   -- Rendering
-  render,
+  render, foldRender,
 
 ) where
 --------------------------------------------------------------------------------
@@ -95,7 +95,7 @@ mkNode x = unsafePerformIO $ do
   ptr <- c'YGNodeNew
   Layout x [] <$> newForeignPtr p'YGNodeFree ptr
 
-mkContainer :: a -> [Layout a] -> Layout a
+mkContainer :: a -> [Layout a] -> Layout a -- 
 mkContainer x cs = unsafePerformIO $ do
   ptr <- c'YGNodeNew
   forM_ (zip cs [0..]) $ \(child, idx) ->
@@ -105,14 +105,25 @@ mkContainer x cs = unsafePerformIO $ do
 
 type RenderFn m a b = (Float, Float) -> (Float, Float) -> a -> m b
 
+calculateLayout :: Monad m => ForeignPtr C'YGNode -> m ()
+calculateLayout ptr = do
+  return $ unsafePerformIO $ withForeignPtr ptr $ \cptr ->
+    let n = (nan :: CFloat)
+    in c'YGNodeCalculateLayout cptr n n c'YGDirectionLTR
+
+layoutBounds :: ForeignPtr C'YGNode -> (Float, Float, Float, Float)
+layoutBounds ptr =
+  (getLayout c'YGNodeLayoutGetLeft,
+   getLayout c'YGNodeLayoutGetTop,
+   getLayout c'YGNodeLayoutGetWidth,
+   getLayout c'YGNodeLayoutGetHeight)
+  where
+    cf = realToFrac :: CFloat -> Float
+    getLayout lytFn = cf $ unsafePerformIO $ withForeignPtr ptr lytFn
+
 renderTree :: Monad m => Layout a -> RenderFn m a b -> m (Layout b)
 renderTree (Layout x cs ptr) f = do
-  let cf = realToFrac :: CFloat -> Float
-  let getLayout lytFn = return $ cf $ unsafePerformIO $ withForeignPtr ptr lytFn
-  left <- getLayout c'YGNodeLayoutGetLeft
-  top <- getLayout c'YGNodeLayoutGetTop
-  width <- getLayout c'YGNodeLayoutGetWidth
-  height <- getLayout c'YGNodeLayoutGetHeight
+  (left, top, width, height) <- return $ layoutBounds ptr
   Layout
     <$> f (left, top) (width, height) x
     <*> mapM (flip renderTree f) cs
@@ -120,7 +131,20 @@ renderTree (Layout x cs ptr) f = do
 
 render :: Monad m => Layout a -> RenderFn m a b -> m (Layout b)
 render lyt@(Layout _ _ ptr) f = do
-  _ <- return $ unsafePerformIO $ withForeignPtr ptr $ \cptr ->
-        let n = (nan :: CFloat)
-        in c'YGNodeCalculateLayout cptr n n c'YGDirectionLTR
-  renderTree lyt f     
+  _ <- calculateLayout ptr
+  renderTree lyt f
+
+foldRenderTree :: (Monad m, Monoid b) =>
+                  Layout a -> RenderFn m a (b, c) -> m (b, Layout c)
+foldRenderTree (Layout x cs ptr) f = do
+  (left, top, width, height) <- return $ layoutBounds ptr
+  (m, y) <- f (left, top) (width, height) x
+  cs' <- mapM (flip foldRenderTree f) cs
+  return (mappend m . foldr mappend mempty . map fst $ cs',
+          Layout y (map snd cs') ptr)
+
+foldRender :: (Monad m, Monoid b) =>
+              Layout a -> RenderFn m a (b, c) -> m (b, Layout c)
+foldRender lyt@(Layout _ _ ptr) f = do
+  _ <- calculateLayout ptr
+  foldRenderTree lyt f
