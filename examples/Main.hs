@@ -1,7 +1,7 @@
 module Main where
 
 --------------------------------------------------------------------------------
-import Yoga as Yoga
+import qualified Yoga as Yoga
 --------------------------------------------------------------------------------
 
 renderIntFn :: (Float, Float) -> (Float, Float) -> Int -> IO String
@@ -14,7 +14,7 @@ renderStringFn _ _ str = putStrLn str
 
 main :: IO ()
 main = do
-  let node = mkNode 0
-  a' <- render node renderIntFn
-  _ <- render a' renderStringFn
+  let node = Yoga.node 100.0 100.0 0
+  a' <- Yoga.render node renderIntFn
+  _ <- Yoga.render a' renderStringFn
   return ()

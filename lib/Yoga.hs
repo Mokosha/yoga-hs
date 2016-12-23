@@ -1,10 +1,10 @@
 module Yoga (
   -- Initialization
-  Layout, payload, children, mkNode, mkContainer,
+  Layout, payload, children, node, container, rightToLeftContainer,
 
   -- Style attributes
-  Direction(..), FlexDirection(..), Justify(..), Align(..),
-  PositionType(..), Overflow(..), Edge(..),
+  Direction(..), Justify(..), Align(..), PositionType(..), Overflow(..),
+  Edge(..),
 
   -- Rendering
   render, foldRender,
@@ -20,16 +20,22 @@ import Data.Traversable()
 import Foreign.C.Types (CFloat)
 import Foreign.ForeignPtr
 
+import GHC.Ptr (Ptr)
+
 import Numeric.IEEE
 
 import System.IO.Unsafe
 --------------------------------------------------------------------------------
 
+type NativeNode = ForeignPtr C'YGNode
+type NativeNodePtr = Ptr C'YGNode
 data Layout a =
   Layout { payload :: a,
            children :: [Layout a],
-           internalPtr :: ForeignPtr C'YGNode
+           internalPtr :: NativeNode
          }
+
+type RenderFn m a b = (Float, Float) -> (Float, Float) -> a -> m b
 
 instance Functor Layout where
   fmap f (Layout x cs ptr) = Layout (f x) (fmap (fmap f) cs) ptr
@@ -46,11 +52,6 @@ instance Traversable Layout where
     Layout <$> x <*> sequenceA (sequenceA <$> cs) <*> pure ptr
 
 data Direction
-  = Inherit
-  | LeftToRight
-  | RightToLeft
-
-data FlexDirection
   = Column
   | ColumnReverse
   | Row
@@ -90,28 +91,38 @@ data Edge
   | Edge'Vertical
   | Edge'All
 
-mkNode :: a -> Layout a
-mkNode x = unsafePerformIO $ do
+node :: Float -> Float -> a -> Layout a
+node width height x = unsafePerformIO $ do
   ptr <- c'YGNodeNew
+  c'YGNodeStyleSetWidth ptr (realToFrac width)
+  c'YGNodeStyleSetHeight ptr (realToFrac height)
   Layout x [] <$> newForeignPtr p'YGNodeFree ptr
 
-mkContainer :: a -> [Layout a] -> Layout a -- 
-mkContainer x cs = unsafePerformIO $ do
-  ptr <- c'YGNodeNew
+addChildrenToContainer :: NativeNodePtr -> a -> [Layout a] -> IO (Layout a)
+addChildrenToContainer ptr x cs = do
   forM_ (zip cs [0..]) $ \(child, idx) ->
     withForeignPtr (internalPtr child) $ \childPtr ->
     c'YGNodeInsertChild ptr childPtr idx
   Layout x cs <$> newForeignPtr p'YGNodeFree ptr
 
-type RenderFn m a b = (Float, Float) -> (Float, Float) -> a -> m b
+container :: a -> [Layout a] -> Layout a
+container x cs = unsafePerformIO $ do
+  ptr <- c'YGNodeNew
+  addChildrenToContainer ptr x cs
 
-calculateLayout :: Monad m => ForeignPtr C'YGNode -> m ()
+rightToLeftContainer :: a -> [Layout a] -> Layout a
+rightToLeftContainer x cs = unsafePerformIO $ do
+  ptr <- c'YGNodeNew
+  c'YGNodeStyleSetDirection ptr c'YGDirectionRTL
+  addChildrenToContainer ptr x cs
+
+calculateLayout :: Monad m => NativeNode -> m ()
 calculateLayout ptr = do
   return $ unsafePerformIO $ withForeignPtr ptr $ \cptr ->
     let n = (nan :: CFloat)
-    in c'YGNodeCalculateLayout cptr n n c'YGDirectionLTR
+    in c'YGNodeStyleGetDirection cptr >>= c'YGNodeCalculateLayout cptr n n
 
-layoutBounds :: ForeignPtr C'YGNode -> (Float, Float, Float, Float)
+layoutBounds :: NativeNode -> (Float, Float, Float, Float)
 layoutBounds ptr =
   (getLayout c'YGNodeLayoutGetLeft,
    getLayout c'YGNodeLayoutGetTop,
