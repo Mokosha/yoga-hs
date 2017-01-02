@@ -32,18 +32,28 @@ import Data.Traversable()
 import Foreign.C.Types (CFloat, CInt)
 import Foreign.ForeignPtr
 
+import GHC.Ptr (Ptr)
+
 import Numeric.IEEE
 
 import System.IO.Unsafe
 --------------------------------------------------------------------------------
 
-type NativeNode = ForeignPtr C'YGNode
 data Layout a
-  = Container { _payload :: a,
+  = Root { _payload :: a,
+           _children :: [Layout a],
+           _rootPtr :: ForeignPtr C'YGNode }
+  | Container { _payload :: a,
                 _children :: [Layout a],
-                internalPtr :: NativeNode }
+                _childPtr :: Ptr C'YGNode }
   | Leaf { _payload :: a,
-           internalPtr :: NativeNode }
+           _childPtr :: Ptr C'YGNode }
+  deriving (Show, Eq, Ord)
+
+withNativePtr :: Layout a -> (Ptr C'YGNode -> IO b) -> IO b
+withNativePtr (Root _ _ ptr) f = withForeignPtr ptr f
+withNativePtr (Container _ _ ptr) f = f ptr
+withNativePtr (Leaf _ ptr) f = f ptr
 
 data Children a
   = StartToEnd [Layout a]
@@ -52,6 +62,7 @@ data Children a
   | SpaceBetween [Layout a]
   | SpaceAround [Layout a]
   | Wrap (Children a)
+  deriving (Show, Eq, Ord)
 
 data Edge
   = Edge'Left
@@ -68,78 +79,102 @@ data Edge
 type RenderFn m a b = (Float, Float) -> (Float, Float) -> a -> m b
 
 instance Functor Layout where
+  fmap f (Root x cs ptr) = Root (f x) (fmap (fmap f) cs) ptr
   fmap f (Container x cs ptr) = Container (f x) (fmap (fmap f) cs) ptr
   fmap f (Leaf x ptr) = Leaf (f x) ptr
 
 instance Foldable Layout where
+  foldMap f (Root x cs _) = f x `mappend` (foldMap (foldMap f) cs)
   foldMap f (Container x cs _) = f x `mappend` (foldMap (foldMap f) cs)
   foldMap f (Leaf x _) = f x
 
+  foldl f z (Root x cs _) = foldl (foldl f) (f z x) cs
   foldl f z (Container x cs _) = foldl (foldl f) (f z x) cs
   foldl f z (Leaf x _) = f z x
 
+  foldr f z (Root x cs _) = f x $ foldr (flip $ foldr f) z cs
   foldr f z (Container x cs _) = f x $ foldr (flip $ foldr f) z cs
   foldr f z (Leaf x _) = f x z
 
 instance Traversable Layout where
+  traverse f (Root x cs ptr) =
+    Root <$> f x <*> (sequenceA $ traverse f <$> cs) <*> pure ptr
   traverse f (Container x cs ptr) =
     Container <$> f x <*> (sequenceA $ traverse f <$> cs) <*> pure ptr
   traverse f (Leaf x ptr) = Leaf <$> f x <*> pure ptr
 
+  sequenceA (Root x cs ptr) =
+    Root <$> x <*> sequenceA (sequenceA <$> cs) <*> pure ptr
   sequenceA (Container x cs ptr) =
     Container <$> x <*> sequenceA (sequenceA <$> cs) <*> pure ptr
   sequenceA (Leaf x ptr) = Leaf <$> x <*> pure ptr
 
-calculateLayout :: Monad m => NativeNode -> m ()
-calculateLayout ptr = do
-  return $ unsafePerformIO $ withForeignPtr ptr $ \cptr ->
-    let n = (nan :: CFloat)
-    in c'YGNodeStyleGetDirection cptr >>= c'YGNodeCalculateLayout cptr n n
+calculateLayout :: Ptr C'YGNode -> IO ()
+calculateLayout ptr =
+  let n = (nan :: CFloat)
+  in c'YGNodeStyleGetDirection ptr >>= c'YGNodeCalculateLayout ptr n n
 
-layoutBounds :: NativeNode -> (Float, Float, Float, Float)
-layoutBounds ptr =
-  (getLayout c'YGNodeLayoutGetLeft,
-   getLayout c'YGNodeLayoutGetTop,
-   getLayout c'YGNodeLayoutGetWidth,
-   getLayout c'YGNodeLayoutGetHeight)
-  where
-    cf = realToFrac :: CFloat -> Float
-    getLayout lytFn = cf $ unsafePerformIO $ withForeignPtr ptr lytFn
+layoutBounds :: Ptr C'YGNode -> IO (Float, Float, Float, Float)
+layoutBounds ptr = do
+  left <- realToFrac <$> c'YGNodeLayoutGetLeft ptr
+  top <- realToFrac <$> c'YGNodeLayoutGetTop ptr
+  width <- realToFrac <$> c'YGNodeLayoutGetWidth ptr
+  height <- realToFrac <$> c'YGNodeLayoutGetHeight ptr
+  return (left, top, width, height)
 
 renderTree :: Monad m => Layout a -> RenderFn m a b -> m (Layout b)
 renderTree (Leaf x ptr) f = do
-  (left, top, width, height) <- return $ layoutBounds ptr
+  (left, top, width, height) <- return $ unsafePerformIO $ layoutBounds ptr
   Leaf <$> f (left, top) (width, height) x <*> pure ptr
 renderTree (Container x cs ptr) f = do
-  (left, top, width, height) <- return $ layoutBounds ptr
+  (left, top, width, height) <- return $ unsafePerformIO $ layoutBounds ptr
   Container
+    <$> f (left, top) (width, height) x
+    <*> mapM (flip renderTree f) cs
+    <*> pure ptr
+renderTree (Root x cs ptr) f = do
+  (left, top, width, height) <-
+    return $ unsafePerformIO $ withForeignPtr ptr layoutBounds
+  Root
     <$> f (left, top) (width, height) x
     <*> mapM (flip renderTree f) cs
     <*> pure ptr
 
 render :: Monad m => Layout a -> RenderFn m a b -> m (Layout b)
 render lyt f = do
-  _ <- calculateLayout (internalPtr lyt)
+  _ <- (unsafePerformIO $ withNativePtr lyt calculateLayout) `seq` return ()
   renderTree lyt f
 
 foldRenderTree :: (Monad m, Monoid b) =>
                   Layout a -> RenderFn m a (b, c) -> m (b, Layout c)
 foldRenderTree (Leaf x ptr) f = do
-  (left, top, width, height) <- return $ layoutBounds ptr
+  (left, top, width, height) <- return $ unsafePerformIO $ layoutBounds ptr
   (m, y) <- f (left, top) (width, height) x
   return (mappend m mempty, Leaf y ptr)
 foldRenderTree (Container x cs ptr) f = do
-  (left, top, width, height) <- return $ layoutBounds ptr
+  (left, top, width, height) <- return $ unsafePerformIO $ layoutBounds ptr
   (m, y) <- f (left, top) (width, height) x
   cs' <- mapM (flip foldRenderTree f) cs
   return (mappend m . foldr mappend mempty . map fst $ cs',
           Container y (map snd cs') ptr)
+foldRenderTree (Root x cs ptr) f = do
+  (left, top, width, height) <-
+    return $ unsafePerformIO $ withForeignPtr ptr layoutBounds
+  (m, y) <- f (left, top) (width, height) x
+  cs' <- mapM (flip foldRenderTree f) cs
+  return (mappend m . foldr mappend mempty . map fst $ cs',
+          Root y (map snd cs') ptr)
 
 foldRender :: (Monad m, Monoid b) =>
               Layout a -> RenderFn m a (b, c) -> m (b, Layout c)
 foldRender lyt f = do
-  _ <- calculateLayout (internalPtr lyt)
+  _ <- (unsafePerformIO $ withNativePtr lyt calculateLayout) `seq` return ()
   foldRenderTree lyt f
+
+mkNode :: a -> IO (Layout a)
+mkNode x = do
+  ptr <- c'YGNodeNew
+  Root x [] <$> newForeignPtr p'YGNodeFree ptr
 
 startToEnd :: [Layout a] -> Children a
 startToEnd = StartToEnd
@@ -166,10 +201,29 @@ justifiedContainer just cs x = do
   c'YGNodeStyleSetJustifyContent ptr just
   c'YGNodeStyleSetFlexWrap ptr c'YGWrapNoWrap
 
-  forM_ (zip cs [0..]) $ \(child, idx) ->
-    withForeignPtr (internalPtr child) $ \childPtr ->
-    c'YGNodeInsertChild ptr childPtr idx
-  Container x cs <$> newForeignPtr p'YGNodeFree ptr
+  cs' <- flip mapM (zip cs [0..]) $ \(child, idx) ->
+    case child of
+      (Root p [] fptr) -> withForeignPtr fptr $ \oldptr -> do
+        newptr <- c'YGNodeNew
+        c'YGNodeCopyStyle newptr oldptr
+        c'YGNodeInsertChild ptr newptr idx
+        return $ Leaf p newptr
+      (Root p childs fptr) -> withForeignPtr fptr $ \oldptr -> do
+        newptr <- c'YGNodeNew
+        forM_ (zip childs [0..]) $ \(oldChild, oldChildIdx) -> do
+          case oldChild of
+            (Container _ _ oldChildPtr) -> do
+              c'YGNodeRemoveChild oldptr oldChildPtr
+              c'YGNodeInsertChild newptr oldChildPtr oldChildIdx
+            (Leaf _ oldChildPtr) -> do
+              c'YGNodeRemoveChild oldptr oldChildPtr
+              c'YGNodeInsertChild newptr oldChildPtr oldChildIdx
+            _ -> error "Removing native tree structure of root children!"
+        c'YGNodeCopyStyle newptr oldptr
+        c'YGNodeInsertChild ptr newptr idx
+        return $ Container p childs newptr
+      _ -> error "Adding non-root children to container!"
+  Root x cs' <$> newForeignPtr p'YGNodeFreeRecursive ptr
 
 assembleChildren :: Children a -> a -> IO (Layout a)
 assembleChildren (StartToEnd cs) x = justifiedContainer c'YGJustifyFlexStart cs x
@@ -181,13 +235,13 @@ assembleChildren (Wrap cs) x = assembleChildren cs x >>= wrapContainer
   where
     wrapContainer :: Layout a -> IO (Layout a)
     wrapContainer lyt = do
-      withForeignPtr (internalPtr lyt) $ \ptr ->
+      withNativePtr lyt $ \ptr ->
         c'YGNodeStyleSetFlexWrap ptr c'YGWrapWrap
       return lyt
 
 setContainerDirection :: CInt -> CInt -> Layout a -> IO ()
 setContainerDirection dir flexDir lyt =
-  withForeignPtr (internalPtr lyt) $ \ptr -> do
+  withNativePtr lyt $ \ptr -> do
     c'YGNodeStyleSetDirection ptr dir
     c'YGNodeStyleSetFlexDirection ptr flexDir
 
@@ -232,39 +286,29 @@ data Size
   | Min Float
   | Max Float
   | Range Float Float
+    deriving (Read, Show, Eq, Ord)
 
-mkNode :: a -> IO (Layout a)
-mkNode x = do
-  ptr <- c'YGNodeNew
-  Leaf x <$> newForeignPtr p'YGNodeFree ptr
-  
 setWidth :: Size -> Layout a -> IO ()
 setWidth (Exact w) lyt =
-  withForeignPtr (internalPtr lyt) $ \ptr ->
-    c'YGNodeStyleSetWidth ptr $ realToFrac w
+  withNativePtr lyt $ \ptr -> c'YGNodeStyleSetWidth ptr $ realToFrac w
 setWidth (Min w) lyt =
-  withForeignPtr (internalPtr lyt) $ \ptr ->
-    c'YGNodeStyleSetMinWidth ptr $ realToFrac w
+  withNativePtr lyt $ \ptr -> c'YGNodeStyleSetMinWidth ptr $ realToFrac w
 setWidth (Max w) lyt =
-  withForeignPtr (internalPtr lyt) $ \ptr ->
-    c'YGNodeStyleSetMaxWidth ptr $ realToFrac w
+  withNativePtr lyt $ \ptr -> c'YGNodeStyleSetMaxWidth ptr $ realToFrac w
 setWidth (Range minWidth maxWidth) lyt =
-  withForeignPtr (internalPtr lyt) $ \ptr -> do
+  withNativePtr lyt $ \ptr -> do
     c'YGNodeStyleSetMinWidth ptr $ realToFrac minWidth
     c'YGNodeStyleSetMaxWidth ptr $ realToFrac maxWidth
 
 setHeight :: Size -> Layout a -> IO ()
 setHeight (Exact h) lyt =
-  withForeignPtr (internalPtr lyt) $ \ptr ->
-    c'YGNodeStyleSetHeight ptr $ realToFrac h
+  withNativePtr lyt $ \ptr -> c'YGNodeStyleSetHeight ptr $ realToFrac h
 setHeight (Min h) lyt =
-  withForeignPtr (internalPtr lyt) $ \ptr ->
-    c'YGNodeStyleSetMinHeight ptr $ realToFrac h
+  withNativePtr lyt $ \ptr -> c'YGNodeStyleSetMinHeight ptr $ realToFrac h
 setHeight (Max h) lyt =
-  withForeignPtr (internalPtr lyt) $ \ptr ->
-    c'YGNodeStyleSetMaxHeight ptr $ realToFrac h
+  withNativePtr lyt $ \ptr -> c'YGNodeStyleSetMaxHeight ptr $ realToFrac h
 setHeight (Range minHeight maxHeight) lyt =
-  withForeignPtr (internalPtr lyt) $ \ptr -> do
+  withNativePtr lyt $ \ptr -> do
     c'YGNodeStyleSetMinHeight ptr $ realToFrac minHeight
     c'YGNodeStyleSetMaxHeight ptr $ realToFrac maxHeight
 
@@ -273,8 +317,7 @@ shrinkable weight width height x = unsafePerformIO $ do
   n <- mkNode x
   setWidth width n
   setHeight height n
-  withForeignPtr (internalPtr n) $ \ptr ->
-    c'YGNodeStyleSetFlexShrink ptr $ realToFrac weight
+  withNativePtr n $ \ptr -> c'YGNodeStyleSetFlexShrink ptr $ realToFrac weight
   return n
 
 growable :: Float -> Size -> Size -> a -> Layout a
@@ -282,8 +325,7 @@ growable weight width height x = unsafePerformIO $ do
   n <- mkNode x
   setWidth width n
   setHeight height n
-  withForeignPtr (internalPtr n) $ \ptr ->
-    c'YGNodeStyleSetFlexGrow ptr $ realToFrac weight
+  withNativePtr n $ \ptr -> c'YGNodeStyleSetFlexGrow ptr $ realToFrac weight
   return n
 
 exact :: Float -> Float -> a -> Layout a
@@ -297,14 +339,12 @@ stretched :: (a -> Layout a) -> a -> Layout a
 stretched mkNodeFn x =
   let node = mkNodeFn x
   in unsafePerformIO $ do
-    withForeignPtr (internalPtr node) $ \ptr ->
-      c'YGNodeStyleSetAlignSelf ptr c'YGAlignStretch
+    withNativePtr node $ \ptr -> c'YGNodeStyleSetAlignSelf ptr c'YGAlignStretch
     return node
 
 setMargin :: CInt -> Float -> Layout a -> IO (Layout a)
 setMargin edge px node = do
-  withForeignPtr (internalPtr node) $ \ptr ->
-    c'YGNodeStyleSetMargin ptr edge $ realToFrac px
+  withNativePtr node $ \ptr -> c'YGNodeStyleSetMargin ptr edge $ realToFrac px
   return node
 
 marginSetWith :: Edge -> Float -> (a -> Layout a) -> a -> Layout a
@@ -329,7 +369,7 @@ marginSetWith Edge'All px mkNodeFn x =
 
 setPadding :: CInt -> Float -> Layout a -> IO (Layout a)
 setPadding edge px node = do
-  withForeignPtr (internalPtr node) $ \ptr ->
+  withNativePtr node $ \ptr ->
     c'YGNodeStyleSetPadding ptr edge $ realToFrac px
   return node
 

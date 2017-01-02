@@ -11,15 +11,14 @@
 
 module Bindings.Yoga where
 
-import Prelude (Eq, IO, Show)
-import Prelude (($), return)
-
 import Data.Data        (Data)
 import Data.Typeable    (Typeable)
 import Foreign.C.Types  (CFloat(..), CInt(..), CUInt(..))
 import Foreign.Ptr      (FunPtr, Ptr, plusPtr)
 import Foreign.Storable (Storable(..))
 
+import Prelude (Eq, IO, Show)
+import Prelude (($), return)
 --------------------------------------------------------------------------------
 
 #starttype struct YGSize
@@ -56,7 +55,7 @@ YGSetMemoryFuncs(YGMalloc ygmalloc, YGCalloc yccalloc, YGRealloc ygrealloc, YGFr
 
 #ccall YGNodeInsertChild, Ptr <YGNode> -> Ptr <YGNode> -> CUInt -> IO ()
 #ccall YGNodeRemoveChild, Ptr <YGNode> -> Ptr <YGNode> -> IO ()
-#ccall YGNodeGetChild, Ptr <YGNode> -> CUInt -> IO ()
+#ccall YGNodeGetChild, Ptr <YGNode> -> CUInt -> IO (Ptr <YGNode>)
 #ccall YGNodeChildCount, Ptr <YGNode> -> CUInt -> IO CUInt
 
 #ccall YGNodeCalculateLayout, Ptr <YGNode> -> CFloat -> CFloat -> CInt -> IO ()
