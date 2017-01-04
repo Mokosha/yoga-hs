@@ -4,8 +4,9 @@ module Main where
 import qualified Yoga as Yoga
 --------------------------------------------------------------------------------
 
-renderIntFn :: (Float, Float) -> (Float, Float) -> Int -> IO String
-renderIntFn (left, top) _ x = do
+renderIntFn :: Yoga.LayoutInfo -> Int -> IO String
+renderIntFn info x = do
+  let (top, left) = Yoga.topLeft info
   putStrLn $ concat ["Node ", show x, ": (", show left, ", ", show top, ")"]
   return ""
 

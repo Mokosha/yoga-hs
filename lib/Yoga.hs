@@ -19,7 +19,7 @@ module Yoga (
   stretched, marginSetWith, paddingSetWith,
 
   -- Rendering
-  render, foldRender,
+  LayoutInfo(..), render, foldRender,
 
 ) where
 --------------------------------------------------------------------------------
@@ -76,7 +76,22 @@ data Edge
   | Edge'All
   deriving (Read, Show, Eq, Ord, Enum, Bounded)
 
-type RenderFn m a b = (Float, Float) -> (Float, Float) -> a -> m b
+data LayoutInfo = LayoutInfo {
+  topLeft :: (Float, Float),
+  dims :: (Float, Float),
+  padding :: (Float, Float, Float, Float)
+}
+
+emptyInfo :: LayoutInfo
+emptyInfo = LayoutInfo (0, 0) (0, 0) (0, 0, 0, 0)
+
+layoutWithParent :: LayoutInfo -> LayoutInfo -> LayoutInfo
+layoutWithParent parent child =
+  let (x, y) = topLeft parent
+      (x', y') = topLeft child
+  in child { topLeft = (x + x', y + y') }
+
+type RenderFn m a b = LayoutInfo -> a -> m b
 
 instance Functor Layout where
   fmap f (Root x cs ptr) = Root (f x) (fmap (fmap f) cs) ptr
@@ -114,54 +129,60 @@ calculateLayout ptr =
   let n = (nan :: CFloat)
   in c'YGNodeStyleGetDirection ptr >>= c'YGNodeCalculateLayout ptr n n
 
-layoutBounds :: Ptr C'YGNode -> IO (Float, Float, Float, Float)
-layoutBounds ptr = do
+layoutInfo :: Ptr C'YGNode -> IO LayoutInfo
+layoutInfo ptr = do
   left <- realToFrac <$> c'YGNodeLayoutGetLeft ptr
   top <- realToFrac <$> c'YGNodeLayoutGetTop ptr
   width <- realToFrac <$> c'YGNodeLayoutGetWidth ptr
   height <- realToFrac <$> c'YGNodeLayoutGetHeight ptr
-  return (left, top, width, height)
+  pt <- realToFrac <$> c'YGNodeStyleGetPadding ptr c'YGEdgeTop
+  pl <- realToFrac <$> c'YGNodeStyleGetPadding ptr c'YGEdgeLeft
+  pr <- realToFrac <$> c'YGNodeStyleGetPadding ptr c'YGEdgeRight
+  pb <- realToFrac <$> c'YGNodeStyleGetPadding ptr c'YGEdgeBottom
+  return $ LayoutInfo (top, left) (width, height) (pt, pl, pr, pb)
 
-renderTree :: Monad m => Layout a -> RenderFn m a b -> m (Layout b)
-renderTree (Leaf x ptr) f = do
-  (left, top, width, height) <- return $ unsafePerformIO $ layoutBounds ptr
-  Leaf <$> f (left, top) (width, height) x <*> pure ptr
-renderTree (Container x cs ptr) f = do
-  (left, top, width, height) <- return $ unsafePerformIO $ layoutBounds ptr
+renderTree :: Monad m => LayoutInfo -> Layout a -> RenderFn m a b -> m (Layout b)
+renderTree parentInfo (Leaf x ptr) f = do
+  info <- return $ unsafePerformIO $ layoutInfo ptr
+  Leaf <$> f (layoutWithParent parentInfo info) x <*> pure ptr
+renderTree parentInfo (Container x cs ptr) f = do
+  info <- return $ unsafePerformIO $ layoutInfo ptr
+  let thisInfo = layoutWithParent parentInfo info
   Container
-    <$> f (left, top) (width, height) x
-    <*> mapM (flip renderTree f) cs
+    <$> f thisInfo x
+    <*> mapM (flip (renderTree thisInfo) f) cs
     <*> pure ptr
-renderTree (Root x cs ptr) f = do
-  (left, top, width, height) <-
-    return $ unsafePerformIO $ withForeignPtr ptr layoutBounds
+renderTree parentInfo (Root x cs ptr) f = do
+  info <- return $ unsafePerformIO $ withForeignPtr ptr layoutInfo
+  let thisInfo = layoutWithParent parentInfo info
   Root
-    <$> f (left, top) (width, height) x
-    <*> mapM (flip renderTree f) cs
+    <$> f thisInfo x
+    <*> mapM (flip (renderTree thisInfo) f) cs
     <*> pure ptr
 
 render :: Monad m => Layout a -> RenderFn m a b -> m (Layout b)
 render lyt f = do
   _ <- (unsafePerformIO $ withNativePtr lyt calculateLayout) `seq` return ()
-  renderTree lyt f
+  renderTree emptyInfo lyt f
 
 foldRenderTree :: (Monad m, Monoid b) =>
-                  Layout a -> RenderFn m a (b, c) -> m (b, Layout c)
-foldRenderTree (Leaf x ptr) f = do
-  (left, top, width, height) <- return $ unsafePerformIO $ layoutBounds ptr
-  (m, y) <- f (left, top) (width, height) x
+                  LayoutInfo -> Layout a -> RenderFn m a (b, c) -> m (b, Layout c)
+foldRenderTree parentInfo (Leaf x ptr) f = do
+  info <- return $ unsafePerformIO $ layoutInfo ptr
+  (m, y) <- f (layoutWithParent parentInfo info) x
   return (mappend m mempty, Leaf y ptr)
-foldRenderTree (Container x cs ptr) f = do
-  (left, top, width, height) <- return $ unsafePerformIO $ layoutBounds ptr
-  (m, y) <- f (left, top) (width, height) x
-  cs' <- mapM (flip foldRenderTree f) cs
+foldRenderTree parentInfo (Container x cs ptr) f = do
+  info <- return $ unsafePerformIO $ layoutInfo ptr
+  let thisInfo = layoutWithParent parentInfo info
+  (m, y) <- f thisInfo x
+  cs' <- mapM (flip (foldRenderTree thisInfo) f) cs
   return (mappend m . foldr mappend mempty . map fst $ cs',
           Container y (map snd cs') ptr)
-foldRenderTree (Root x cs ptr) f = do
-  (left, top, width, height) <-
-    return $ unsafePerformIO $ withForeignPtr ptr layoutBounds
-  (m, y) <- f (left, top) (width, height) x
-  cs' <- mapM (flip foldRenderTree f) cs
+foldRenderTree parentInfo (Root x cs ptr) f = do
+  info <- return $ unsafePerformIO $ withForeignPtr ptr layoutInfo
+  let thisInfo = layoutWithParent parentInfo info
+  (m, y) <- f thisInfo x
+  cs' <- mapM (flip (foldRenderTree thisInfo) f) cs
   return (mappend m . foldr mappend mempty . map fst $ cs',
           Root y (map snd cs') ptr)
 
@@ -169,7 +190,7 @@ foldRender :: (Monad m, Monoid b) =>
               Layout a -> RenderFn m a (b, c) -> m (b, Layout c)
 foldRender lyt f = do
   _ <- (unsafePerformIO $ withNativePtr lyt calculateLayout) `seq` return ()
-  foldRenderTree lyt f
+  foldRenderTree emptyInfo lyt f
 
 mkNode :: a -> IO (Layout a)
 mkNode x = do
