@@ -77,19 +77,22 @@ data Edge
   deriving (Read, Show, Eq, Ord, Enum, Bounded)
 
 data LayoutInfo = LayoutInfo {
-  topLeft :: (Float, Float),
-  dims :: (Float, Float),
-  padding :: (Float, Float, Float, Float)
+  nodePosition :: (Float, Float),
+  nodeDimensions :: (Float, Float),
+  nodePaddingTop :: Float,
+  nodePaddingLeft :: Float,
+  nodePaddingRight :: Float,
+  nodePaddingBottom :: Float
 }
 
 emptyInfo :: LayoutInfo
-emptyInfo = LayoutInfo (0, 0) (0, 0) (0, 0, 0, 0)
+emptyInfo = LayoutInfo (0, 0) (0, 0) 0 0 0 0
 
 layoutWithParent :: LayoutInfo -> LayoutInfo -> LayoutInfo
 layoutWithParent parent child =
-  let (x, y) = topLeft parent
-      (x', y') = topLeft child
-  in child { topLeft = (x + x', y + y') }
+  let (x, y) = nodePosition parent
+      (x', y') = nodePosition child
+  in child { nodePosition = (x + x', y + y') }
 
 type RenderFn m a b = LayoutInfo -> a -> m b
 
@@ -139,7 +142,7 @@ layoutInfo ptr = do
   pl <- realToFrac <$> c'YGNodeStyleGetPadding ptr c'YGEdgeLeft
   pr <- realToFrac <$> c'YGNodeStyleGetPadding ptr c'YGEdgeRight
   pb <- realToFrac <$> c'YGNodeStyleGetPadding ptr c'YGEdgeBottom
-  return $ LayoutInfo (top, left) (width, height) (pt, pl, pr, pb)
+  return $ LayoutInfo (top, left) (width, height) pt pl pr pb
 
 renderTree :: Monad m => LayoutInfo -> Layout a -> RenderFn m a b -> m (Layout b)
 renderTree parentInfo (Leaf x ptr) f = do
@@ -250,8 +253,10 @@ assembleChildren :: Children a -> a -> IO (Layout a)
 assembleChildren (StartToEnd cs) x = justifiedContainer c'YGJustifyFlexStart cs x
 assembleChildren (EndToStart cs) x = justifiedContainer c'YGJustifyFlexEnd cs x
 assembleChildren (Centered cs) x = justifiedContainer c'YGJustifyCenter cs x
-assembleChildren (SpaceBetween cs) x = justifiedContainer c'YGJustifySpaceBetween cs x
-assembleChildren (SpaceAround cs) x = justifiedContainer c'YGJustifySpaceAround cs x
+assembleChildren (SpaceBetween cs) x =
+  justifiedContainer c'YGJustifySpaceBetween cs x
+assembleChildren (SpaceAround cs) x =
+  justifiedContainer c'YGJustifySpaceAround cs x
 assembleChildren (Wrap cs) x = assembleChildren cs x >>= wrapContainer
   where
     wrapContainer :: Layout a -> IO (Layout a)
@@ -266,38 +271,38 @@ setContainerDirection dir flexDir lyt =
     c'YGNodeStyleSetDirection ptr dir
     c'YGNodeStyleSetFlexDirection ptr flexDir
 
-hbox :: Children a -> a -> Layout a
-hbox cs x = unsafePerformIO $ do
+hbox :: a -> Children a -> Layout a
+hbox x cs = unsafePerformIO $ do
   node <- assembleChildren cs x
   setContainerDirection c'YGDirectionInherit c'YGFlexDirectionRow node
   return node
 
-vbox :: Children a -> a -> Layout a
-vbox cs x = unsafePerformIO $ do
+vbox :: a -> Children a -> Layout a
+vbox x cs = unsafePerformIO $ do
   node <- assembleChildren cs x
   setContainerDirection c'YGDirectionInherit c'YGFlexDirectionColumn node
   return node
 
-hboxLeftToRight :: Children a -> a -> Layout a
-hboxLeftToRight cs x = unsafePerformIO $ do
+hboxLeftToRight :: a -> Children a -> Layout a
+hboxLeftToRight x cs = unsafePerformIO $ do
   node <- assembleChildren cs x
   setContainerDirection c'YGDirectionLTR c'YGFlexDirectionRow node
   return node
 
-hboxRightToLeft :: Children a -> a -> Layout a
-hboxRightToLeft cs x = unsafePerformIO $ do
+hboxRightToLeft :: a -> Children a -> Layout a
+hboxRightToLeft x cs = unsafePerformIO $ do
   node <- assembleChildren cs x
   setContainerDirection c'YGDirectionRTL c'YGFlexDirectionRow node
   return node
 
-vboxTopToBottom :: Children a -> a -> Layout a
-vboxTopToBottom cs x = unsafePerformIO $ do
+vboxTopToBottom :: a -> Children a -> Layout a
+vboxTopToBottom x cs = unsafePerformIO $ do
   node <- assembleChildren cs x
   setContainerDirection c'YGDirectionLTR c'YGFlexDirectionColumn node
   return node
 
-vboxBottomToTop :: Children a -> a -> Layout a
-vboxBottomToTop cs x = unsafePerformIO $ do
+vboxBottomToTop :: a -> Children a -> Layout a
+vboxBottomToTop x cs = unsafePerformIO $ do
   node <- assembleChildren cs x
   setContainerDirection c'YGDirectionRTL c'YGFlexDirectionColumn node
   return node
@@ -356,7 +361,7 @@ exact width height x = unsafePerformIO $ do
   setHeight (Exact height) n
   return n
 
-stretched :: (a -> Layout a) -> a -> Layout a
+stretched :: (b -> Layout a) -> b -> Layout a
 stretched mkNodeFn x =
   let node = mkNodeFn x
   in unsafePerformIO $ do
@@ -368,7 +373,7 @@ setMargin edge px node = do
   withNativePtr node $ \ptr -> c'YGNodeStyleSetMargin ptr edge $ realToFrac px
   return node
 
-marginSetWith :: Edge -> Float -> (a -> Layout a) -> a -> Layout a
+marginSetWith :: Edge -> Float -> (b -> Layout a) -> b -> Layout a
 marginSetWith Edge'Left px mkNodeFn x =
   unsafePerformIO $ setMargin c'YGEdgeLeft px (mkNodeFn x)
 marginSetWith Edge'Top px mkNodeFn x =
@@ -394,7 +399,7 @@ setPadding edge px node = do
     c'YGNodeStyleSetPadding ptr edge $ realToFrac px
   return node
 
-paddingSetWith :: Edge -> Float -> (a -> Layout a) -> a -> Layout a
+paddingSetWith :: Edge -> Float -> (b -> Layout a) -> b -> Layout a
 paddingSetWith Edge'Left px mkNodeFn x =
   unsafePerformIO $ setPadding c'YGEdgeLeft px (mkNodeFn x)
 paddingSetWith Edge'Top px mkNodeFn x =
