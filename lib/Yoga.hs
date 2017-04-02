@@ -1,6 +1,6 @@
 {-|
 Module      : Yoga
-Description : Bindings to Facebook's Yoga layout library
+Description : Bindings to Facebook's Yoga layout engine
 Copyright   : (c) Pavel Krajcevski, 2017
 License     : MIT
 Maintainer  : Krajcevski@gmail.com
@@ -8,20 +8,25 @@ Stability   : experimental
 Portability : POSIX
 
 This module holds a high-level interface to the bindings associated with this
-library that are maintained in Yoga.Bindings. Application developers will likely
-want to use this module to interface with the library, but are available to
-use the C-level bindings if more control is desired.
+library that are maintained in "Bindings.Yoga". Application developers will
+likely want to use this module to interface with the library, but are available
+to use the C-level bindings if more control is desired.
+
+These bindings are not affiliated with Facebook in any way, and have been
+developed separately for the sole purpose of interfacing with their open source
+library.
+
+Full documentation can be found at <http://facebook.github.io/yoga>
 -}
 module Yoga (
-  -- * High-level layout bindings
-
-  -- ** Main datatypes
-  Layout, Children,
+  -- ** Main datatype
+  Layout,
 
   -- ** Children layouts
-  -- These layouts describe the way that children are ordered and spaced
+  -- | These layouts describe the way that children are ordered and spaced
   -- within their parent.
-  startToEnd, endToStart, centered, spaceBetween, spaceAround, wrapped,
+  Children, startToEnd, endToStart, centered, spaceBetween, spaceAround,
+  wrapped,
   
   -- ** Containers
   hbox, vbox,
@@ -79,6 +84,8 @@ withNativePtr (Root _ _ ptr) f = withForeignPtr ptr f
 withNativePtr (Container _ _ ptr) f = f ptr
 withNativePtr (Leaf _ ptr) f = f ptr
 
+-- | Children are a list of layouts annotated with a style for how they should
+-- be laid out in their container.
 data Children a
   = StartToEnd [Layout a]
   | EndToStart [Layout a]
@@ -322,6 +329,7 @@ exact width height x = unsafePerformIO $ do
   setHeight (Exact height) n
   return n
 
+-- | Allows a container to stretch to fit its parent
 stretched :: (b -> Layout a) -> b -> Layout a
 stretched mkNodeFn x =
   let node = mkNodeFn x
@@ -329,6 +337,9 @@ stretched mkNodeFn x =
     withNativePtr node $ \ptr -> c'YGNodeStyleSetAlignSelf ptr c'YGAlignStretch
     return node
 
+-- | Edges are used to describe the direction from which we want to alter an
+-- attribute of a node. They are currently only being used with 'withMargin' and
+-- 'withPadding'.
 data Edge
   = Edge'Left
   | Edge'Top
@@ -347,9 +358,8 @@ setMargin edge px node = do
   return node
 
 -- | Transforms a layout generator to one which applies the given margin. E.g.:
--- @
---   let lyt = (exact 200.0 300.0 . withMargin Edge'Left 10.0) payload
--- @
+--
+-- > let lyt = (exact 200.0 300.0 . withMargin Edge'Left 10.0) payload
 withMargin :: Edge -> Float -> (b -> Layout a) -> b -> Layout a
 withMargin Edge'Left px mkNodeFn x =
   unsafePerformIO $ setMargin c'YGEdgeLeft px (mkNodeFn x)
@@ -377,9 +387,8 @@ setPadding edge px node = do
   return node
 
 -- | Transforms a layout generator to one which applies the given margin. E.g.:
--- @
---   let lyt = (exact 200.0 300.0 . withPadding Edge'Left 10.0) payload
--- @
+--
+-- > let lyt = (exact 200.0 300.0 . withPadding Edge'Left 10.0) payload
 withPadding :: Edge -> Float -> (b -> Layout a) -> b -> Layout a
 withPadding Edge'Left px mkNodeFn x =
   unsafePerformIO $ setPadding c'YGEdgeLeft px (mkNodeFn x)
@@ -403,13 +412,19 @@ withPadding Edge'All px mkNodeFn x =
 --------------------------------------------------------------------------------
 -- Rendering
 
+-- | Stores the calculated layout information for a given node. During
+-- rendering, the rendering function will take the payload and layout info to
+-- facilitate the renderer to do whatever it needs to with the given layout
+-- calculations. Because the layout engine reports both padding and margin in
+-- the position and dimensions, we also include the amount of padding on each
+-- side so that the renderer can make intelligent decisions (e.g. background).
 data LayoutInfo = LayoutInfo {
-  nodePosition :: (Float, Float),
-  nodeDimensions :: (Float, Float),
-  nodePaddingTop :: Float,
-  nodePaddingLeft :: Float,
-  nodePaddingRight :: Float,
-  nodePaddingBottom :: Float
+  nodePosition :: (Float, Float),    -- ^ The top left position of this node
+  nodeDimensions :: (Float, Float),  -- ^ The width and height of this node
+  nodePaddingTop :: Float,           -- ^ Padding from the top of this node
+  nodePaddingLeft :: Float,          -- ^ Padding from the left edge
+  nodePaddingRight :: Float,         -- ^ Padding from the right edge
+  nodePaddingBottom :: Float         -- ^ Padding from the bottom of this node
 }
 
 emptyInfo :: LayoutInfo
