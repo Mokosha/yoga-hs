@@ -357,9 +357,11 @@ setMargin edge px node = do
   withNativePtr node $ \ptr -> c'YGNodeStyleSetMargin ptr edge $ realToFrac px
   return node
 
--- | Transforms a layout generator to one which applies the given margin. E.g.:
+-- | Transforms a layout generator to one which applies the given margin using
+-- continuation passing style. In this way we maintain the const-ness of layout
+-- nodes. E.g.:
 --
--- > let lyt = (exact 200.0 300.0 . withMargin Edge'Left 10.0) payload
+-- > let lyt = ($ payload) (withMargin Edge'Left 10.0 $ exact 200.0 300.0)
 withMargin :: Edge -> Float -> (b -> Layout a) -> b -> Layout a
 withMargin Edge'Left px mkNodeFn x =
   unsafePerformIO $ setMargin c'YGEdgeLeft px (mkNodeFn x)
@@ -386,9 +388,11 @@ setPadding edge px node = do
     c'YGNodeStyleSetPadding ptr edge $ realToFrac px
   return node
 
--- | Transforms a layout generator to one which applies the given margin. E.g.:
+-- | Transforms a layout generator to one which applies the given padding using
+-- continuation passing style. In this way we maintain the const-ness of layout
+-- nodes. E.g.:
 --
--- > let lyt = (exact 200.0 300.0 . withPadding Edge'Left 10.0) payload
+-- > let lyt = ($ payload) (withPadding Edge'Left 10.0 $ exact 200.0 300.0)
 withPadding :: Edge -> Float -> (b -> Layout a) -> b -> Layout a
 withPadding Edge'Left px mkNodeFn x =
   unsafePerformIO $ setPadding c'YGEdgeLeft px (mkNodeFn x)

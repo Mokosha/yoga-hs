@@ -22,7 +22,7 @@ main = do
         flip Yoga.vbox 3 $
         Yoga.startToEnd [
           mkHbox cs 0,
-          Yoga.withMargin Yoga.Edge'Top 10.0 (mkHbox cs) 1,
+          ($ 1) (Yoga.withMargin Yoga.Edge'Top 10.0 $ mkHbox cs),
           mkHbox cs2 2]
   _ <- Yoga.render tree renderIntFn
   return ()
