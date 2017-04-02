@@ -4,7 +4,8 @@
 name:                yoga
 version:             0.0.0.1
 synopsis:            Bindings to Facebook's Yoga layout library
--- description:         
+description:         The Yoga library from Facebook is a fast layout engine
+                     used to allow GUIs to quickly layout elements.
 license:             BSD3
 license-file:        LICENSE
 author:              Pavel Krajcevski

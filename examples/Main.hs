@@ -4,6 +4,9 @@ module Main where
 import qualified Yoga as Yoga
 --------------------------------------------------------------------------------
 
+block :: Int -> Yoga.Layout Int
+block = Yoga.exact 100.0 100.0
+
 renderIntFn :: Yoga.LayoutInfo -> Int -> IO String
 renderIntFn info x = do
   let tl = Yoga.nodePosition info
@@ -13,9 +16,8 @@ renderIntFn info x = do
 
 main :: IO ()
 main = do
-  let cs = [Yoga.exact 100.0 100.0 y | y <- [6..9]]
-      cs2 = take 4 $ repeat $
-            Yoga.withPadding Yoga.Edge'Left 10.0 (Yoga.exact 100.0 100.0) 23
+  let cs = [ block y | y <- [6..9]]
+      cs2 = take 4 $ repeat $ Yoga.withPadding Yoga.Edge'Left 10.0 block 23
   let tree =
         Yoga.vbox (
           Yoga.startToEnd [
