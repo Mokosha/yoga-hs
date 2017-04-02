@@ -5,7 +5,20 @@ name:                yoga
 version:             0.0.0.1
 synopsis:            Bindings to Facebook's Yoga layout library
 description:         The Yoga library from Facebook is a fast layout engine
-                     used to allow GUIs to quickly layout elements.
+                     used to allow GUIs to quickly layout elements. There are two
+                     main ways to interface with these bindings. The high-level
+                     bindings are stored in the Yoga module and provide a more
+                     Haskell-like interface to the library. The other option is to
+                     directly use the C-level bindings in Bindings.Yoga. If you do
+                     so you do so at your own risk.
+
+                     The examples are not built nor included by default. Please
+                     refer to the source tarball for examples on how to use this
+                     library.
+
+                     These bindings are not affiliated with Facebook in any way,
+                     and have been developed separately for the sole purpose of
+                     interfacing with their open source library.
 license:             BSD3
 license-file:        LICENSE
 author:              Pavel Krajcevski
