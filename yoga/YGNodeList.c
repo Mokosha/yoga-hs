@@ -8,7 +8,10 @@
  */
 
 #include "YGNodeList.h"
-#include "YGMemFuncs.h"
+
+extern YGMalloc gYGMalloc;
+extern YGRealloc gYGRealloc;
+extern YGFree gYGFree;
 
 struct YGNodeList {
   uint32_t capacity;
@@ -17,23 +20,21 @@ struct YGNodeList {
 };
 
 YGNodeListRef YGNodeListNew(const uint32_t initialCapacity) {
-  YGMalloc gMalloc = YGGetMalloc();
-  const YGNodeListRef list = gMalloc(sizeof(struct YGNodeList));
+  const YGNodeListRef list = gYGMalloc(sizeof(struct YGNodeList));
   YG_ASSERT(list != NULL, "Could not allocate memory for list");
 
   list->capacity = initialCapacity;
   list->count = 0;
-  list->items = gMalloc(sizeof(YGNodeRef) * list->capacity);
+  list->items = gYGMalloc(sizeof(YGNodeRef) * list->capacity);
   YG_ASSERT(list->items != NULL, "Could not allocate memory for items");
 
   return list;
 }
 
 void YGNodeListFree(const YGNodeListRef list) {
-  YGFree gFree = YGGetFree();
   if (list) {
-    gFree(list->items);
-    gFree(list);
+    gYGFree(list->items);
+    gYGFree(list);
   }
 }
 
@@ -56,11 +57,10 @@ void YGNodeListInsert(YGNodeListRef *listp, const YGNodeRef node, const uint32_t
     *listp = YGNodeListNew(4);
   }
   YGNodeListRef list = *listp;
-  YGRealloc gRealloc = YGGetRealloc();
 
   if (list->count == list->capacity) {
     list->capacity *= 2;
-    list->items = gRealloc(list->items, sizeof(YGNodeRef) * list->capacity);
+    list->items = gYGRealloc(list->items, sizeof(YGNodeRef) * list->capacity);
     YG_ASSERT(list->items != NULL, "Could not extend allocation for items");
   }
 
