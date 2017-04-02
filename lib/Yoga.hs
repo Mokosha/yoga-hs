@@ -1,25 +1,43 @@
-module Yoga (
-  -- Initialization
-  Layout,
+{-|
+Module      : Yoga
+Description : Bindings to Facebook's Yoga layout library
+Copyright   : (c) Pavel Krajcevski, 2017
+License     : MIT
+Maintainer  : Krajcevski@gmail.com
+Stability   : experimental
+Portability : POSIX
 
-  -- Children layouts
+This module holds a high-level interface to the bindings associated with this
+library that are maintained in Yoga.Bindings. Application developers will likely
+want to use this module to interface with the library, but are available to
+use the C-level bindings if more control is desired.
+-}
+module Yoga (
+  -- * High-level layout bindings
+
+  -- ** Main datatypes
+  Layout, Children,
+
+  -- ** Children layouts
+  -- These layouts describe the way that children are ordered and spaced
+  -- within their parent.
   startToEnd, endToStart, centered, spaceBetween, spaceAround, wrapped,
   
-  -- Containers
+  -- ** Containers
   hbox, vbox,
   hboxLeftToRight, hboxRightToLeft,
   vboxTopToBottom, vboxBottomToTop,
 
-  -- Leaf nodes
+  -- ** Leaf nodes
   Size(..),
   shrinkable, growable, exact,
 
-  -- Attributes
+  -- ** Attributes
   Edge(..),
-  stretched, marginSetWith, paddingSetWith,
+  stretched, withMargin, withPadding,
 
-  -- Rendering
-  render, foldRender,
+  -- ** Rendering
+  RenderFn, render, foldRender,
 
 ) where
 --------------------------------------------------------------------------------
@@ -39,6 +57,12 @@ import Numeric.IEEE
 import System.IO.Unsafe
 --------------------------------------------------------------------------------
 
+-- | The main datatype in the high level bindings is a 'Layout'. Layouts are
+-- used to store a tree of nodes that represent the different components of a
+-- layout. Layouts can be composed by adding one as a sub-tree to another. The
+-- parent-child relationship dictates different parameters such as width, height
+-- and position. This type is opaque to the user in order to facilitate updates
+-- to the library. For more control, use the C-level bindings in Yoga.Bindings.
 data Layout a
   = Root { _payload :: a,
            _children :: [Layout a],
@@ -63,20 +87,6 @@ data Children a
   | SpaceAround [Layout a]
   | Wrap (Children a)
   deriving (Show, Eq, Ord)
-
-data Edge
-  = Edge'Left
-  | Edge'Top
-  | Edge'Right
-  | Edge'Bottom
-  | Edge'Start
-  | Edge'End
-  | Edge'Horizontal
-  | Edge'Vertical
-  | Edge'All
-  deriving (Read, Show, Eq, Ord, Enum, Bounded)
-
-type RenderFn m a b = (Float, Float) -> (Float, Float) -> a -> m b
 
 instance Functor Layout where
   fmap f (Root x cs ptr) = Root (f x) (fmap (fmap f) cs) ptr
@@ -109,88 +119,37 @@ instance Traversable Layout where
     Container <$> x <*> sequenceA (sequenceA <$> cs) <*> pure ptr
   sequenceA (Leaf x ptr) = Leaf <$> x <*> pure ptr
 
-calculateLayout :: Ptr C'YGNode -> IO ()
-calculateLayout ptr =
-  let n = (nan :: CFloat)
-  in c'YGNodeStyleGetDirection ptr >>= c'YGNodeCalculateLayout ptr n n
-
-layoutBounds :: Ptr C'YGNode -> IO (Float, Float, Float, Float)
-layoutBounds ptr = do
-  left <- realToFrac <$> c'YGNodeLayoutGetLeft ptr
-  top <- realToFrac <$> c'YGNodeLayoutGetTop ptr
-  width <- realToFrac <$> c'YGNodeLayoutGetWidth ptr
-  height <- realToFrac <$> c'YGNodeLayoutGetHeight ptr
-  return (left, top, width, height)
-
-renderTree :: Monad m => Layout a -> RenderFn m a b -> m (Layout b)
-renderTree (Leaf x ptr) f = do
-  (left, top, width, height) <- return $ unsafePerformIO $ layoutBounds ptr
-  Leaf <$> f (left, top) (width, height) x <*> pure ptr
-renderTree (Container x cs ptr) f = do
-  (left, top, width, height) <- return $ unsafePerformIO $ layoutBounds ptr
-  Container
-    <$> f (left, top) (width, height) x
-    <*> mapM (flip renderTree f) cs
-    <*> pure ptr
-renderTree (Root x cs ptr) f = do
-  (left, top, width, height) <-
-    return $ unsafePerformIO $ withForeignPtr ptr layoutBounds
-  Root
-    <$> f (left, top) (width, height) x
-    <*> mapM (flip renderTree f) cs
-    <*> pure ptr
-
-render :: Monad m => Layout a -> RenderFn m a b -> m (Layout b)
-render lyt f = do
-  _ <- (unsafePerformIO $ withNativePtr lyt calculateLayout) `seq` return ()
-  renderTree lyt f
-
-foldRenderTree :: (Monad m, Monoid b) =>
-                  Layout a -> RenderFn m a (b, c) -> m (b, Layout c)
-foldRenderTree (Leaf x ptr) f = do
-  (left, top, width, height) <- return $ unsafePerformIO $ layoutBounds ptr
-  (m, y) <- f (left, top) (width, height) x
-  return (mappend m mempty, Leaf y ptr)
-foldRenderTree (Container x cs ptr) f = do
-  (left, top, width, height) <- return $ unsafePerformIO $ layoutBounds ptr
-  (m, y) <- f (left, top) (width, height) x
-  cs' <- mapM (flip foldRenderTree f) cs
-  return (mappend m . foldr mappend mempty . map fst $ cs',
-          Container y (map snd cs') ptr)
-foldRenderTree (Root x cs ptr) f = do
-  (left, top, width, height) <-
-    return $ unsafePerformIO $ withForeignPtr ptr layoutBounds
-  (m, y) <- f (left, top) (width, height) x
-  cs' <- mapM (flip foldRenderTree f) cs
-  return (mappend m . foldr mappend mempty . map fst $ cs',
-          Root y (map snd cs') ptr)
-
-foldRender :: (Monad m, Monoid b) =>
-              Layout a -> RenderFn m a (b, c) -> m (b, Layout c)
-foldRender lyt f = do
-  _ <- (unsafePerformIO $ withNativePtr lyt calculateLayout) `seq` return ()
-  foldRenderTree lyt f
-
 mkNode :: a -> IO (Layout a)
 mkNode x = do
   ptr <- c'YGNodeNew
   Root x [] <$> newForeignPtr p'YGNodeFree ptr
 
+-- | Collects a list of layouts and orients them from start to end depending
+-- on the orientation of the parent (LTR vs RTL).
 startToEnd :: [Layout a] -> Children a
 startToEnd = StartToEnd
 
+-- | Collects a list of layouts and orients them from end to start depending
+-- on the orientation of the parent (LTR vs RTL).
 endToStart :: [Layout a] -> Children a
 endToStart = EndToStart
 
+-- | Collects a list of children and centers them within the parent.
 centered :: [Layout a] -> Children a
 centered = Centered
 
+-- | Collects a list of children that span the parent such that the space
+-- between each child is equal
 spaceBetween :: [Layout a] -> Children a
 spaceBetween = SpaceBetween
 
+-- | Collects a list of children that span the parent such that the space to the
+-- left and right of each child is equal.
 spaceAround :: [Layout a] -> Children a
 spaceAround = SpaceAround
 
+-- | Permits children to wrap to a new line if they exceed the bounds of their
+-- parent
 wrapped :: Children a -> Children a
 wrapped (Wrap xs) = Wrap xs
 wrapped childs = childs
@@ -245,42 +204,61 @@ setContainerDirection dir flexDir lyt =
     c'YGNodeStyleSetDirection ptr dir
     c'YGNodeStyleSetFlexDirection ptr flexDir
 
+-- | Generates a layout from a group of children and a payload such that the
+-- children are laid out horizontally. The orientation (RTL vs LTR) is
+-- inherited from the parent
 hbox :: Children a -> a -> Layout a
 hbox cs x = unsafePerformIO $ do
   node <- assembleChildren cs x
   setContainerDirection c'YGDirectionInherit c'YGFlexDirectionRow node
   return node
 
+-- | Generates a layout from a group of children and a payload such that the
+-- children are laid out vertically. The orientation (top to bottom vs bottom to
+-- top) is inherited from the parent.
 vbox :: Children a -> a -> Layout a
 vbox cs x = unsafePerformIO $ do
   node <- assembleChildren cs x
   setContainerDirection c'YGDirectionInherit c'YGFlexDirectionColumn node
   return node
 
+-- | Generates a layout from a group of children and a payload such that the
+-- children are laid out horizontally from left to right.
 hboxLeftToRight :: Children a -> a -> Layout a
 hboxLeftToRight cs x = unsafePerformIO $ do
   node <- assembleChildren cs x
   setContainerDirection c'YGDirectionLTR c'YGFlexDirectionRow node
   return node
 
+-- | Generates a layout from a group of children and a payload such that the
+-- children are laid out horizontally from right to left.
 hboxRightToLeft :: Children a -> a -> Layout a
 hboxRightToLeft cs x = unsafePerformIO $ do
   node <- assembleChildren cs x
   setContainerDirection c'YGDirectionRTL c'YGFlexDirectionRow node
   return node
 
+-- | Generates a layout from a group of children and a payload such that the
+-- children are laid out vertically from top to bottom.
 vboxTopToBottom :: Children a -> a -> Layout a
 vboxTopToBottom cs x = unsafePerformIO $ do
   node <- assembleChildren cs x
   setContainerDirection c'YGDirectionLTR c'YGFlexDirectionColumn node
   return node
 
+-- | Generates a layout from a group of children and a payload such that the
+-- children are laid out vertically from bottom to top.
 vboxBottomToTop :: Children a -> a -> Layout a
 vboxBottomToTop cs x = unsafePerformIO $ do
   node <- assembleChildren cs x
   setContainerDirection c'YGDirectionRTL c'YGFlexDirectionColumn node
   return node
 
+-- | A 'Size' is used to set properties about given layouts. In general, the
+-- width and height of a node along with its position are laid out by Yoga's
+-- internal layout engine. However, the user may decide to set limits on how
+-- much internal nodes can shrink or grow. This datatype controls those
+-- properties
 data Size
   = Exact Float
   | Min Float
@@ -312,6 +290,9 @@ setHeight (Range minHeight maxHeight) lyt =
     c'YGNodeStyleSetMinHeight ptr $ realToFrac minHeight
     c'YGNodeStyleSetMaxHeight ptr $ realToFrac maxHeight
 
+-- | Creates a layout that may shrink up to the given size. The weight parameter
+-- is used to determine how much this layout will shrink in relation to any
+-- siblings.
 shrinkable :: Float -> Size -> Size -> a -> Layout a
 shrinkable weight width height x = unsafePerformIO $ do
   n <- mkNode x
@@ -320,6 +301,9 @@ shrinkable weight width height x = unsafePerformIO $ do
   withNativePtr n $ \ptr -> c'YGNodeStyleSetFlexShrink ptr $ realToFrac weight
   return n
 
+-- | Creates a layout that may grow up to the given size. The weight parameter
+-- is used to determine how much this layout will grow in relation to any
+-- siblings.
 growable :: Float -> Size -> Size -> a -> Layout a
 growable weight width height x = unsafePerformIO $ do
   n <- mkNode x
@@ -328,6 +312,7 @@ growable weight width height x = unsafePerformIO $ do
   withNativePtr n $ \ptr -> c'YGNodeStyleSetFlexGrow ptr $ realToFrac weight
   return n
 
+-- | Creates a layout with the exact width and height for the given payload.
 exact :: Float -> Float -> a -> Layout a
 exact width height x = unsafePerformIO $ do
   n <- mkNode x
@@ -335,36 +320,47 @@ exact width height x = unsafePerformIO $ do
   setHeight (Exact height) n
   return n
 
-stretched :: (a -> Layout a) -> a -> Layout a
-stretched mkNodeFn x =
-  let node = mkNodeFn x
-  in unsafePerformIO $ do
-    withNativePtr node $ \ptr -> c'YGNodeStyleSetAlignSelf ptr c'YGAlignStretch
-    return node
+-- | Edges are used to describe the direction in which to apply padding and
+-- margin settings.
+data Edge
+  = Edge'Left
+  | Edge'Top
+  | Edge'Right
+  | Edge'Bottom
+  | Edge'Start
+  | Edge'End
+  | Edge'Horizontal
+  | Edge'Vertical
+  | Edge'All
+  deriving (Read, Show, Eq, Ord, Enum, Bounded)
 
 setMargin :: CInt -> Float -> Layout a -> IO (Layout a)
 setMargin edge px node = do
   withNativePtr node $ \ptr -> c'YGNodeStyleSetMargin ptr edge $ realToFrac px
   return node
 
-marginSetWith :: Edge -> Float -> (a -> Layout a) -> a -> Layout a
-marginSetWith Edge'Left px mkNodeFn x =
+-- | Transforms a layout generator to one which applies the given margin. E.g.:
+-- @
+--   let lyt = (exact 200.0 300.0 . withMargin Edge'Left 10.0) payload
+-- @
+withMargin :: Edge -> Float -> (a -> Layout a) -> a -> Layout a
+withMargin Edge'Left px mkNodeFn x =
   unsafePerformIO $ setMargin c'YGEdgeLeft px (mkNodeFn x)
-marginSetWith Edge'Top px mkNodeFn x =
+withMargin Edge'Top px mkNodeFn x =
   unsafePerformIO $ setMargin c'YGEdgeTop px (mkNodeFn x)
-marginSetWith Edge'Right px mkNodeFn x =
+withMargin Edge'Right px mkNodeFn x =
   unsafePerformIO $ setMargin c'YGEdgeRight px (mkNodeFn x)
-marginSetWith Edge'Bottom px mkNodeFn x =
+withMargin Edge'Bottom px mkNodeFn x =
   unsafePerformIO $ setMargin c'YGEdgeBottom px (mkNodeFn x)
-marginSetWith Edge'Start px mkNodeFn x =
+withMargin Edge'Start px mkNodeFn x =
   unsafePerformIO $ setMargin c'YGEdgeStart px (mkNodeFn x)
-marginSetWith Edge'End px mkNodeFn x =
+withMargin Edge'End px mkNodeFn x =
   unsafePerformIO $ setMargin c'YGEdgeEnd px (mkNodeFn x)
-marginSetWith Edge'Horizontal px mkNodeFn x =
+withMargin Edge'Horizontal px mkNodeFn x =
   unsafePerformIO $ setMargin c'YGEdgeHorizontal px (mkNodeFn x)
-marginSetWith Edge'Vertical px mkNodeFn x =
+withMargin Edge'Vertical px mkNodeFn x =
   unsafePerformIO $ setMargin c'YGEdgeVertical px (mkNodeFn x)
-marginSetWith Edge'All px mkNodeFn x =
+withMargin Edge'All px mkNodeFn x =
   unsafePerformIO $ setMargin c'YGEdgeAll px (mkNodeFn x)
 
 setPadding :: CInt -> Float -> Layout a -> IO (Layout a)
@@ -373,22 +369,105 @@ setPadding edge px node = do
     c'YGNodeStyleSetPadding ptr edge $ realToFrac px
   return node
 
-paddingSetWith :: Edge -> Float -> (a -> Layout a) -> a -> Layout a
-paddingSetWith Edge'Left px mkNodeFn x =
+-- | Transforms a layout generator to one which applies the given margin. E.g.:
+-- @
+--   let lyt = (exact 200.0 300.0 . withPadding Edge'Left 10.0) payload
+-- @
+withPadding :: Edge -> Float -> (a -> Layout a) -> a -> Layout a
+withPadding Edge'Left px mkNodeFn x =
   unsafePerformIO $ setPadding c'YGEdgeLeft px (mkNodeFn x)
-paddingSetWith Edge'Top px mkNodeFn x =
+withPadding Edge'Top px mkNodeFn x =
   unsafePerformIO $ setPadding c'YGEdgeTop px (mkNodeFn x)
-paddingSetWith Edge'Right px mkNodeFn x =
+withPadding Edge'Right px mkNodeFn x =
   unsafePerformIO $ setPadding c'YGEdgeRight px (mkNodeFn x)
-paddingSetWith Edge'Bottom px mkNodeFn x =
+withPadding Edge'Bottom px mkNodeFn x =
   unsafePerformIO $ setPadding c'YGEdgeBottom px (mkNodeFn x)
-paddingSetWith Edge'Start px mkNodeFn x =
+withPadding Edge'Start px mkNodeFn x =
   unsafePerformIO $ setPadding c'YGEdgeStart px (mkNodeFn x)
-paddingSetWith Edge'End px mkNodeFn x =
+withPadding Edge'End px mkNodeFn x =
   unsafePerformIO $ setPadding c'YGEdgeEnd px (mkNodeFn x)
-paddingSetWith Edge'Horizontal px mkNodeFn x =
+withPadding Edge'Horizontal px mkNodeFn x =
   unsafePerformIO $ setPadding c'YGEdgeHorizontal px (mkNodeFn x)
-paddingSetWith Edge'Vertical px mkNodeFn x =
+withPadding Edge'Vertical px mkNodeFn x =
   unsafePerformIO $ setPadding c'YGEdgeVertical px (mkNodeFn x)
-paddingSetWith Edge'All px mkNodeFn x =
+withPadding Edge'All px mkNodeFn x =
   unsafePerformIO $ setPadding c'YGEdgeAll px (mkNodeFn x)
+
+--------------------------------------------------------------------------------
+-- Rendering
+
+-- | A 'RenderFn' takes a top-left position and a width and height of a node
+-- with the given payload. The function is expected to perform some monadic
+-- action in the 'Monad' m, and return a new payload of type b. This function is
+-- called on each node in order during a call to render.
+type RenderFn m a b = (Float, Float) -> (Float, Float) -> a -> m b
+
+calculateLayout :: Ptr C'YGNode -> IO ()
+calculateLayout ptr =
+  let n = (nan :: CFloat)
+  in c'YGNodeStyleGetDirection ptr >>= c'YGNodeCalculateLayout ptr n n
+
+layoutBounds :: Ptr C'YGNode -> IO (Float, Float, Float, Float)
+layoutBounds ptr = do
+  left <- realToFrac <$> c'YGNodeLayoutGetLeft ptr
+  top <- realToFrac <$> c'YGNodeLayoutGetTop ptr
+  width <- realToFrac <$> c'YGNodeLayoutGetWidth ptr
+  height <- realToFrac <$> c'YGNodeLayoutGetHeight ptr
+  return (left, top, width, height)
+
+renderTree :: Monad m => Layout a -> RenderFn m a b -> m (Layout b)
+renderTree (Leaf x ptr) f = do
+  (left, top, width, height) <- return $ unsafePerformIO $ layoutBounds ptr
+  Leaf <$> f (left, top) (width, height) x <*> pure ptr
+renderTree (Container x cs ptr) f = do
+  (left, top, width, height) <- return $ unsafePerformIO $ layoutBounds ptr
+  Container
+    <$> f (left, top) (width, height) x
+    <*> mapM (flip renderTree f) cs
+    <*> pure ptr
+renderTree (Root x cs ptr) f = do
+  (left, top, width, height) <-
+    return $ unsafePerformIO $ withForeignPtr ptr layoutBounds
+  Root
+    <$> f (left, top) (width, height) x
+    <*> mapM (flip renderTree f) cs
+    <*> pure ptr
+
+-- | Renders a layout with the user-supplied function. The renderer traverses
+-- the tree from root node to children and transforms each payload using the
+-- user-supplied function.
+render :: Monad m => Layout a -> RenderFn m a b -> m (Layout b)
+render lyt f = do
+  _ <- (unsafePerformIO $ withNativePtr lyt calculateLayout) `seq` return ()
+  renderTree lyt f
+
+foldRenderTree :: (Monad m, Monoid b) =>
+                  Layout a -> RenderFn m a (b, c) -> m (b, Layout c)
+foldRenderTree (Leaf x ptr) f = do
+  (left, top, width, height) <- return $ unsafePerformIO $ layoutBounds ptr
+  (m, y) <- f (left, top) (width, height) x
+  return (mappend m mempty, Leaf y ptr)
+foldRenderTree (Container x cs ptr) f = do
+  (left, top, width, height) <- return $ unsafePerformIO $ layoutBounds ptr
+  (m, y) <- f (left, top) (width, height) x
+  cs' <- mapM (flip foldRenderTree f) cs
+  return (mappend m . foldr mappend mempty . map fst $ cs',
+          Container y (map snd cs') ptr)
+foldRenderTree (Root x cs ptr) f = do
+  (left, top, width, height) <-
+    return $ unsafePerformIO $ withForeignPtr ptr layoutBounds
+  (m, y) <- f (left, top) (width, height) x
+  cs' <- mapM (flip foldRenderTree f) cs
+  return (mappend m . foldr mappend mempty . map fst $ cs',
+          Root y (map snd cs') ptr)
+
+-- | Renders a layout with the user-supplied function. For each return value
+-- of type '(b, c)', we append the first result to the output of the previous
+-- node. The second result is stored as the new payload for the given node.
+-- Hence, the resulting monadic action produces a 'mappend'-ed set of 'b's and
+-- a new layout with payloads of type 'c'.
+foldRender :: (Monad m, Monoid b) =>
+              Layout a -> RenderFn m a (b, c) -> m (b, Layout c)
+foldRender lyt f = do
+  _ <- (unsafePerformIO $ withNativePtr lyt calculateLayout) `seq` return ()
+  foldRenderTree lyt f
