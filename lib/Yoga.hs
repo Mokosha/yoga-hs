@@ -415,26 +415,22 @@ withPadding Edge'All px mkNodeFn x =
 -- | Stores the calculated layout information for a given node. During
 -- rendering, the rendering function will take the payload and layout info to
 -- facilitate the renderer to do whatever it needs to with the given layout
--- calculations. Because the layout engine reports both padding and margin in
--- the position and dimensions, we also include the amount of padding on each
--- side so that the renderer can make intelligent decisions (e.g. background).
+-- calculations.
 data LayoutInfo = LayoutInfo {
-  nodePosition :: (Float, Float),    -- ^ The top left position of this node
-  nodeDimensions :: (Float, Float),  -- ^ The width and height of this node
-  nodePaddingTop :: Float,           -- ^ Padding from the top of this node
-  nodePaddingLeft :: Float,          -- ^ Padding from the left edge
-  nodePaddingRight :: Float,         -- ^ Padding from the right edge
-  nodePaddingBottom :: Float         -- ^ Padding from the bottom of this node
-}
+  nodeTop :: Float,     -- ^ The y-coordinate of this node
+  nodeLeft :: Float,    -- ^ The x-coordinate of this node
+  nodeWidth :: Float,   -- ^ The width of this node
+  nodeHeight :: Float   -- ^ The height of this node
+} deriving (Eq, Show)
 
 emptyInfo :: LayoutInfo
-emptyInfo = LayoutInfo (0, 0) (0, 0) 0 0 0 0
+emptyInfo = LayoutInfo 0 0 0 0
 
 layoutWithParent :: LayoutInfo -> LayoutInfo -> LayoutInfo
 layoutWithParent parent child =
-  let (x, y) = nodePosition parent
-      (x', y') = nodePosition child
-  in child { nodePosition = (x + x', y + y') }
+  let (x, y) = (nodeLeft parent, nodeTop parent)
+      (x', y') = (nodeLeft child, nodeTop child)
+  in child { nodeLeft = x + x', nodeTop = y + y' }
 
 -- | A 'RenderFn' takes a top-left position and a width and height of a node
 -- with the given payload. The function is expected to perform some monadic
@@ -453,11 +449,7 @@ layoutInfo ptr = do
   top <- realToFrac <$> c'YGNodeLayoutGetTop ptr
   width <- realToFrac <$> c'YGNodeLayoutGetWidth ptr
   height <- realToFrac <$> c'YGNodeLayoutGetHeight ptr
-  pt <- realToFrac <$> c'YGNodeStyleGetPadding ptr c'YGEdgeTop
-  pl <- realToFrac <$> c'YGNodeStyleGetPadding ptr c'YGEdgeLeft
-  pr <- realToFrac <$> c'YGNodeStyleGetPadding ptr c'YGEdgeRight
-  pb <- realToFrac <$> c'YGNodeStyleGetPadding ptr c'YGEdgeBottom
-  return $ LayoutInfo (top, left) (width, height) pt pl pr pb
+  return $ LayoutInfo top left width height
 
 renderTree :: Monad m => LayoutInfo -> Layout a -> RenderFn m a b -> m (Layout b)
 renderTree parentInfo (Leaf x ptr) f = do
