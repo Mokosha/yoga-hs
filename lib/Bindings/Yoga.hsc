@@ -58,7 +58,6 @@ YGSetMemoryFuncs(YGMalloc ygmalloc, YGCalloc yccalloc, YGRealloc ygrealloc, YGFr
 #ccall YGNodeInsertChild, Ptr <YGNode> -> Ptr <YGNode> -> CUInt -> IO ()
 #ccall YGNodeRemoveChild, Ptr <YGNode> -> Ptr <YGNode> -> IO ()
 #ccall YGNodeGetChild, Ptr <YGNode> -> CUInt -> IO (Ptr <YGNode>)
-#ccall YGNodeChildCount, Ptr <YGNode> -> CUInt -> IO CUInt
 
 #ccall YGNodeCalculateLayout, Ptr <YGNode> -> CFloat -> CFloat -> CInt -> IO ()
 
@@ -73,7 +72,6 @@ YGSetMemoryFuncs(YGMalloc ygmalloc, YGCalloc yccalloc, YGRealloc ygrealloc, YGFr
 #ccall YGNodeIsDirty, Ptr <YGNode> -> IO CInt
 
 #ccall YGNodePrint, Ptr <YGNode> -> CInt -> IO ()
-#ccall YGValueIsUndefined, CFloat -> IO CInt
 
 #ccall YGNodeCanUseCachedMeasurement, CInt -> CFloat -> CInt -> CFloat -> CInt -> CFloat -> CInt -> CFloat -> CFloat -> CFloat -> CFloat -> CFloat -> IO CInt
 
@@ -173,6 +171,3 @@ YGSetMemoryFuncs(YGMalloc ygmalloc, YGCalloc yccalloc, YGRealloc ygrealloc, YGFr
 #ccall YGNodeLayoutGetWidth, Ptr <YGNode> -> IO CFloat
 #ccall YGNodeLayoutGetHeight, Ptr <YGNode> -> IO CFloat
 #ccall YGNodeLayoutGetDirection, Ptr <YGNode> -> IO CInt
-
-#ccall YGSetExperimentalFeatureEnabled, CInt -> CInt -> IO ()
-#ccall YGIsExperimentalFeatureEnabled, CInt -> IO CInt
