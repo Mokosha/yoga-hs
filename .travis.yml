@@ -96,7 +96,6 @@ install:
 - |
   case "$BUILD" in
     stack)
-      stack init
       stack --no-terminal --install-ghc $ARGS test --only-dependencies
       ;;
     cabal)
@@ -110,8 +109,7 @@ script:
 - |
   case "$BUILD" in
     stack)
-      stack init
-      stack --no-terminal $ARGS test --haddock --no-haddock-deps --flag lambency:examples
+      stack --no-terminal $ARGS test --haddock --no-haddock-deps --flag yoga:examples
       ;;
     cabal)
       cabal configure -fexamples --enable-tests --enable-benchmarks -v2 --ghc-options="-O0 -Werror"
