@@ -50,7 +50,7 @@ import Bindings.Yoga
 import Bindings.Yoga.Enums
 
 import Control.Applicative
-import Control.Monad
+import Control.Monad hiding (mapM, forM_)
 
 import Data.Foldable
 import Data.Traversable
