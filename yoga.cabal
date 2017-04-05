@@ -43,6 +43,11 @@ library
     ghc-options: -fwarn-tabs
   build-tools:      hsc2hs
   include-dirs:     yoga/
+  install-includes: YGEnums.h
+                    YGMacros.h
+                    YGMemFuncs.h
+                    YGNodeList.h
+                    Yoga.h
   c-sources:        yoga/YGNodeList.c
                     yoga/Yoga.c
 
