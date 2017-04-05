@@ -57,7 +57,7 @@ library
 
   build-depends:
     base            >= 4     && < 6,
-    ieee754         >= 0.7.9 && < 0.8,
+    ieee754         >= 0.7,
     bindings-DSL    == 1.0.*
 
 flag                 examples
