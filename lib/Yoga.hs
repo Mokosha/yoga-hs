@@ -66,7 +66,7 @@ import Numeric.IEEE
 import System.IO.Unsafe
 
 -- Last to avoid compiler warnings due to the Foldable/Traversable Proposal
-import Prelude hiding (foldl, foldr)
+import Prelude hiding (foldl, foldr, mapM)
 --------------------------------------------------------------------------------
 
 -- | The main datatype in the high level bindings is a 'Layout'. Layouts are
