@@ -118,7 +118,6 @@ script:
       cabal check || [ "$CABALVER" == "1.16" ]
       cabal test
       cabal sdist
-      tar -ztf dist/yoga-0.0.0.1.tar.gz
       cabal copy
       SRC_TGZ=$(cabal info . | awk '{print $2;exit}').tar.gz && \
         (cd dist && cabal install --force-reinstalls "$SRC_TGZ")
