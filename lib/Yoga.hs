@@ -50,6 +50,7 @@ import Bindings.Yoga
 import Bindings.Yoga.Enums
 
 import Data.Foldable
+import Data.Traversable
 
 import Foreign.C.Types (CFloat, CInt)
 import Foreign.ForeignPtr
@@ -59,6 +60,9 @@ import GHC.Ptr (Ptr)
 import Numeric.IEEE
 
 import System.IO.Unsafe
+
+-- Last to avoid compiler warnings due to the Foldable/Traversable Proposal
+import Prelude
 --------------------------------------------------------------------------------
 
 -- | The main datatype in the high level bindings is a 'Layout'. Layouts are
