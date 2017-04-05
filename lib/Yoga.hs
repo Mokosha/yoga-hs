@@ -49,8 +49,12 @@ module Yoga (
 import Bindings.Yoga
 import Bindings.Yoga.Enums
 
+import Control.Applicative
+import Control.Monad
+
 import Data.Foldable
 import Data.Traversable
+import Data.Monoid
 
 import Foreign.C.Types (CFloat, CInt)
 import Foreign.ForeignPtr
@@ -62,7 +66,7 @@ import Numeric.IEEE
 import System.IO.Unsafe
 
 -- Last to avoid compiler warnings due to the Foldable/Traversable Proposal
-import Prelude
+import Prelude hiding (foldl, foldr)
 --------------------------------------------------------------------------------
 
 -- | The main datatype in the high level bindings is a 'Layout'. Layouts are
