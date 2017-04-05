@@ -50,7 +50,6 @@ import Bindings.Yoga
 import Bindings.Yoga.Enums
 
 import Data.Foldable
-import Data.Traversable()
 
 import Foreign.C.Types (CFloat, CInt)
 import Foreign.ForeignPtr
