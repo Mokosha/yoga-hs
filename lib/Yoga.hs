@@ -462,7 +462,8 @@ layoutInfo ptr = do
   height <- realToFrac <$> c'YGNodeLayoutGetHeight ptr
   return $ LayoutInfo top left width height
 
-renderTree :: Monad m => LayoutInfo -> Layout a -> RenderFn m a b -> m (Layout b)
+renderTree :: (Functor m, Applicative m, Monad m) =>
+              LayoutInfo -> Layout a -> RenderFn m a b -> m (Layout b)
 renderTree parentInfo (Leaf x ptr) f = do
   info <- return $ unsafePerformIO $ layoutInfo ptr
   Leaf <$> f (layoutWithParent parentInfo info) x <*> pure ptr
@@ -484,12 +485,13 @@ renderTree parentInfo (Root x cs ptr) f = do
 -- | Renders a layout with the user-supplied function. The renderer traverses
 -- the tree from root node to children and transforms each payload using the
 -- user-supplied function.
-render :: Monad m => Layout a -> RenderFn m a b -> m (Layout b)
+render :: (Functor m, Applicative m, Monad m) =>
+          Layout a -> RenderFn m a b -> m (Layout b)
 render lyt f = do
   _ <- (unsafePerformIO $ withNativePtr lyt calculateLayout) `seq` return ()
   renderTree emptyInfo lyt f
 
-foldRenderTree :: (Monad m, Monoid b) =>
+foldRenderTree :: (Functor m, Applicative m, Monad m, Monoid b) =>
                   LayoutInfo -> Layout a -> RenderFn m a (b, c) -> m (b, Layout c)
 foldRenderTree parentInfo (Leaf x ptr) f = do
   info <- return $ unsafePerformIO $ layoutInfo ptr
@@ -515,7 +517,7 @@ foldRenderTree parentInfo (Root x cs ptr) f = do
 -- node. The second result is stored as the new payload for the given node.
 -- Hence, the resulting monadic action produces a 'mappend'-ed set of 'b's and
 -- a new layout with payloads of type 'c'.
-foldRender :: (Monad m, Monoid b) =>
+foldRender :: (Functor m, Applicative m, Monad m, Monoid b) =>
               Layout a -> RenderFn m a (b, c) -> m (b, Layout c)
 foldRender lyt f = do
   _ <- (unsafePerformIO $ withNativePtr lyt calculateLayout) `seq` return ()
