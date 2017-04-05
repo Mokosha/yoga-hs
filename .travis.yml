@@ -114,6 +114,8 @@ script:
       ;;
     cabal)
       cabal configure -fexamples --enable-tests --enable-benchmarks -v2 --ghc-options="-O0 -Werror"
+      pwd
+      ls -al yoga
       cabal build
       cabal check || [ "$CABALVER" == "1.16" ]
       cabal test
