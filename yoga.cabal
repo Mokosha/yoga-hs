@@ -52,7 +52,7 @@ library
     Bindings.Yoga.Enums
 
   build-depends:
-    base            >= 4.9   && < 6,
+    base            >= 4     && < 6,
     ieee754         >= 0.7.9 && < 0.8,
     bindings-DSL    == 1.0.*
 
