@@ -30,19 +30,30 @@ category:            Graphics
 build-type:          Simple
 cabal-version:       >=1.10
 
+source-repository head
+  type:           git
+  location:       https://www.github.com/Mokosha/yoga-hs
+
 library
   default-language: Haskell2010
   hs-source-dirs:      lib
 
   ghc-options: -Wall
+  if impl(ghc >= 8.0)
+    ghc-options: -Wno-redundant-constraints
   if impl(ghc >= 6.8)
     ghc-options: -fwarn-tabs
   build-tools:      hsc2hs
   include-dirs:     yoga/
+  install-includes: YGEnums.h
+                    YGMacros.h
+                    YGMemFuncs.h
+                    YGNodeList.h
+                    Yoga.h
   c-sources:        yoga/YGNodeList.c
                     yoga/Yoga.c
 
-  cc-options: -Wno-format
+  cc-options: -Wno-format -std=gnu99
 
   exposed-modules:
     Bindings.Yoga
@@ -52,8 +63,8 @@ library
     Bindings.Yoga.Enums
 
   build-depends:
-    base            >= 4.9   && < 6,
-    ieee754         >= 0.7.9 && < 0.8,
+    base            >= 4     && < 6,
+    ieee754         >= 0.7,
     bindings-DSL    == 1.0.*
 
 flag                 examples
