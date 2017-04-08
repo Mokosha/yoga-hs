@@ -1,9 +1,6 @@
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE NoImplicitPrelude  #-}
 {-# LANGUAGE StandaloneDeriving #-}
-
-{-# OPTIONS_HADDOCK hide #-}
-
 --------------------------------------------------------------------------------
 
 #include <Yoga.h>
