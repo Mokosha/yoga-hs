@@ -306,7 +306,7 @@ setHeight (Range minHeight maxHeight) lyt =
     c'YGNodeStyleSetMinHeight ptr $ realToFrac minHeight
     c'YGNodeStyleSetMaxHeight ptr $ realToFrac maxHeight
 
--- | Creates a layout that may shrink up to the given size. The weight parameter
+-- | Specifies layout may shrink up to the given size. The weight parameter
 -- is used to determine how much this layout will shrink in relation to any
 -- siblings.
 shrinkable :: Float -> Size -> Size -> (b -> Layout a) -> b -> Layout a
@@ -317,7 +317,7 @@ shrinkable weight width height mkNodeFn x = unsafePerformIO $ do
   withNativePtr n $ \ptr -> c'YGNodeStyleSetFlexShrink ptr $ realToFrac weight
   return n
 
--- | Creates a layout that may grow up to the given size. The weight parameter
+-- | Specifies layout may grow up to the given size. The weight parameter
 -- is used to determine how much this layout will grow in relation to any
 -- siblings.
 growable :: Float -> Size -> Size -> (b -> Layout a) -> b -> Layout a
@@ -336,6 +336,8 @@ exact width height x = unsafePerformIO $ do
   setHeight (Exact height) n
   return n
 
+-- | Specifies the exact dimensions expected for a layout. Can be used for
+-- containers and such when there is not necessarily any rendering involved. 
 withDimensions :: Float -> Float -> (a -> Layout b) -> a -> Layout b
 withDimensions width height mkNodeFn x = unsafePerformIO $ do
   let n = mkNodeFn x
