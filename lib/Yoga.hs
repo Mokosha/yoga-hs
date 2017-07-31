@@ -35,7 +35,7 @@ module Yoga (
 
   -- ** Leaf nodes
   Size(..),
-  shrinkable, growable, exact,
+  shrinkable, growable, exact, withDimensions,
 
   -- ** Attributes
   Edge(..),
@@ -309,9 +309,9 @@ setHeight (Range minHeight maxHeight) lyt =
 -- | Creates a layout that may shrink up to the given size. The weight parameter
 -- is used to determine how much this layout will shrink in relation to any
 -- siblings.
-shrinkable :: Float -> Size -> Size -> a -> Layout a
-shrinkable weight width height x = unsafePerformIO $ do
-  n <- mkNode x
+shrinkable :: Float -> Size -> Size -> (b -> Layout a) -> b -> Layout a
+shrinkable weight width height mkNodeFn x = unsafePerformIO $ do
+  let n = mkNodeFn x
   setWidth width n
   setHeight height n
   withNativePtr n $ \ptr -> c'YGNodeStyleSetFlexShrink ptr $ realToFrac weight
@@ -320,9 +320,9 @@ shrinkable weight width height x = unsafePerformIO $ do
 -- | Creates a layout that may grow up to the given size. The weight parameter
 -- is used to determine how much this layout will grow in relation to any
 -- siblings.
-growable :: Float -> Size -> Size -> a -> Layout a
-growable weight width height x = unsafePerformIO $ do
-  n <- mkNode x
+growable :: Float -> Size -> Size -> (b -> Layout a) -> b -> Layout a
+growable weight width height mkNodeFn x = unsafePerformIO $ do
+  let n = mkNodeFn x
   setWidth width n
   setHeight height n
   withNativePtr n $ \ptr -> c'YGNodeStyleSetFlexGrow ptr $ realToFrac weight
@@ -332,6 +332,13 @@ growable weight width height x = unsafePerformIO $ do
 exact :: Float -> Float -> a -> Layout a
 exact width height x = unsafePerformIO $ do
   n <- mkNode x
+  setWidth (Exact width) n
+  setHeight (Exact height) n
+  return n
+
+withDimensions :: Float -> Float -> (a -> Layout b) -> a -> Layout b
+withDimensions width height mkNodeFn x = unsafePerformIO $ do
+  let n = mkNodeFn x
   setWidth (Exact width) n
   setHeight (Exact height) n
   return n
