@@ -1,0 +1,7 @@
+.cabal-sandbox/
+.stack-work/
+cabal.sandbox.config
+check-plan.yaml
+dist-docs.PwcZqL/
+dist/
+stack.yaml                                                        
