@@ -47,6 +47,7 @@ YGSetMemoryFuncs(YGMalloc ygmalloc, YGCalloc yccalloc, YGRealloc ygrealloc, YGFr
 -}
 
 #ccall YGNodeNew, IO (Ptr <YGNode>)
+#ccall YGNodeClone, Ptr <YGNode> -> IO (Ptr <YGNode>)
 #ccall YGNodeFree, Ptr <YGNode> -> IO ()
 #ccall YGNodeFreeRecursive, Ptr <YGNode> -> IO ()
 #ccall YGNodeReset, Ptr <YGNode> -> IO ()
@@ -54,7 +55,10 @@ YGSetMemoryFuncs(YGMalloc ygmalloc, YGCalloc yccalloc, YGRealloc ygrealloc, YGFr
 
 #ccall YGNodeInsertChild, Ptr <YGNode> -> Ptr <YGNode> -> CUInt -> IO ()
 #ccall YGNodeRemoveChild, Ptr <YGNode> -> Ptr <YGNode> -> IO ()
+#ccall YGNodeRemoveAllChildren, Ptr <YGNode> -> IO ()
 #ccall YGNodeGetChild, Ptr <YGNode> -> CUInt -> IO (Ptr <YGNode>)
+#ccall YGNodeGetParent, Ptr <YGNode> -> IO (Ptr <YGNode>)
+#ccall YGNodeGetChildCount, Ptr <YGNode> -> IO (CUInt)
 
 #ccall YGNodeCalculateLayout, Ptr <YGNode> -> CFloat -> CFloat -> CInt -> IO ()
 

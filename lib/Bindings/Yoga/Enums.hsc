@@ -88,7 +88,6 @@ import Prelude (Num)
 #num YGOverflowCount
 
 -- typedef enum YGExperimentalFeature {
-#num YGExperimentalFeatureRounding
 #num YGExperimentalFeatureWebFlexBasis
 #num YGExperimentalFeatureCount
 

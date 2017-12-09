@@ -48,12 +48,14 @@ library
   install-includes: YGEnums.h
                     YGMacros.h
                     YGMemFuncs.h
-                    YGNodeList.h
+                    YGNodePrint.h
                     Yoga.h
-  c-sources:        yoga/YGNodeList.c
-                    yoga/Yoga.c
+                    Yoga-internal.h
+  c-sources:        yoga/YGNodePrint.cpp
+                    yoga/Yoga.cpp
+                    yoga/YGEnums.cpp
 
-  cc-options: -Wno-format -std=gnu99
+  extra-libraries:  stdc++
 
   exposed-modules:
     Bindings.Yoga
@@ -65,7 +67,7 @@ library
   build-depends:
     base            >= 4     && < 6,
     ieee754         >= 0.7,
-    bindings-DSL    == 1.0.*
+    bindings-DSL    >= 1.0.24
 
 flag                 examples
   description:       Build examples
