@@ -225,8 +225,7 @@ void YGNodeFree(const YGNodeRef node) {
     child->parent = nullptr;
   }
 
-  YGVector c;
-  node->children.swap(c);
+  YGVector().swap(node->children);
   free(node);
   gNodeInstanceCount--;
 }
@@ -253,8 +252,7 @@ void YGNodeReset(const YGNodeRef node) {
       node->parent == nullptr,
       "Cannot reset a node still attached to a parent");
 
-  YGVector c;
-  node->children.swap(c);
+  YGVector().swap(node->children);
 
   const YGConfigRef config = node->config;
   memcpy(node, &gYGNodeDefaults, sizeof(YGNode));
@@ -440,8 +438,7 @@ void YGNodeRemoveAllChildren(const YGNodeRef parent) {
       oldChild->layout = gYGNodeDefaults.layout; // layout is no longer valid
       oldChild->parent = nullptr;
     }
-    YGVector c;
-    parent->children.swap(c);
+    YGVector().swap(parent->children);
     YGNodeMarkDirtyInternal(parent);
     return;
   }
