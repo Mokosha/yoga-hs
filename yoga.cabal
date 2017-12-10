@@ -55,6 +55,7 @@ library
                     yoga/Yoga.cpp
                     yoga/YGEnums.cpp
 
+  cpp-options:      --std=c++11
   extra-libraries:  stdc++
 
   exposed-modules:
