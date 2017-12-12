@@ -59,7 +59,7 @@ import Data.Monoid
 import Foreign.C.Types (CFloat, CInt)
 import Foreign.ForeignPtr
 
-import GHC.Ptr (Ptr)
+import GHC.Ptr (Ptr, nullPtr)
 
 import Numeric.IEEE
 
@@ -174,28 +174,16 @@ justifiedContainer just cs x = do
   c'YGNodeStyleSetJustifyContent ptr just
   c'YGNodeStyleSetFlexWrap ptr c'YGWrapNoWrap
 
-  cs' <- flip mapM (zip cs [0..]) $ \(child, idx) ->
-    case child of
-      (Root p [] fptr) -> withForeignPtr fptr $ \oldptr -> do
-        newptr <- c'YGNodeNew
-        c'YGNodeCopyStyle newptr oldptr
-        c'YGNodeInsertChild ptr newptr idx
-        return $ Leaf p newptr
-      (Root p childs fptr) -> withForeignPtr fptr $ \oldptr -> do
-        newptr <- c'YGNodeNew
-        forM_ (zip childs [0..]) $ \(oldChild, oldChildIdx) -> do
-          case oldChild of
-            (Container _ _ oldChildPtr) -> do
-              c'YGNodeRemoveChild oldptr oldChildPtr
-              c'YGNodeInsertChild newptr oldChildPtr oldChildIdx
-            (Leaf _ oldChildPtr) -> do
-              c'YGNodeRemoveChild oldptr oldChildPtr
-              c'YGNodeInsertChild newptr oldChildPtr oldChildIdx
-            _ -> error "Removing native tree structure of root children!"
-        c'YGNodeCopyStyle newptr oldptr
-        c'YGNodeInsertChild ptr newptr idx
-        return $ Container p childs newptr
-      _ -> error "Adding non-root children to container!"
+  cs' <- flip mapM (zip cs [0..]) $ \((Root p children fptr), idx) -> do
+    withForeignPtr fptr $ \oldptr -> do
+      parent <- c'YGNodeGetParent oldptr
+      newptr <- if parent == nullPtr
+                then return oldptr
+                else c'YGNodeClone oldptr
+      c'YGNodeInsertChild ptr newptr idx
+      return $ if null children
+               then Leaf p newptr
+               else Container p children newptr
   Root x cs' <$> newForeignPtr p'YGNodeFreeRecursive ptr
 
 assembleChildren :: Children a -> a -> IO (Layout a)
