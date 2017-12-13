@@ -59,7 +59,7 @@ import Data.Monoid
 import Foreign.C.Types (CFloat, CInt)
 import Foreign.ForeignPtr
 
-import GHC.Ptr (Ptr, nullPtr)
+import GHC.Ptr (Ptr)
 
 import Numeric.IEEE
 
@@ -80,16 +80,13 @@ data Layout a
            _children :: [Layout a],
            _rootPtr :: ForeignPtr C'YGNode }
   | Container { _payload :: a,
-                _children :: [Layout a],
-                _childPtr :: Ptr C'YGNode }
-  | Leaf { _payload :: a,
-           _childPtr :: Ptr C'YGNode }
+                _children :: [Layout a] }
+  | Leaf { _payload :: a }
   deriving (Show, Eq, Ord)
 
 withNativePtr :: Layout a -> (Ptr C'YGNode -> IO b) -> IO b
 withNativePtr (Root _ _ ptr) f = withForeignPtr ptr f
-withNativePtr (Container _ _ ptr) f = f ptr
-withNativePtr (Leaf _ ptr) f = f ptr
+withNativePtr _ _ = error "Internal: Only root nodes have pointers"
 
 -- | Children are a list of layouts annotated with a style for how they should
 -- be laid out in their container.
@@ -104,34 +101,34 @@ data Children a
 
 instance Functor Layout where
   fmap f (Root x cs ptr) = Root (f x) (fmap (fmap f) cs) ptr
-  fmap f (Container x cs ptr) = Container (f x) (fmap (fmap f) cs) ptr
-  fmap f (Leaf x ptr) = Leaf (f x) ptr
+  fmap f (Container x cs) = Container (f x) (fmap (fmap f) cs)
+  fmap f (Leaf x) = Leaf (f x)
 
 instance Foldable Layout where
   foldMap f (Root x cs _) = f x `mappend` (foldMap (foldMap f) cs)
-  foldMap f (Container x cs _) = f x `mappend` (foldMap (foldMap f) cs)
-  foldMap f (Leaf x _) = f x
+  foldMap f (Container x cs) = f x `mappend` (foldMap (foldMap f) cs)
+  foldMap f (Leaf x) = f x
 
   foldl f z (Root x cs _) = foldl (foldl f) (f z x) cs
-  foldl f z (Container x cs _) = foldl (foldl f) (f z x) cs
-  foldl f z (Leaf x _) = f z x
+  foldl f z (Container x cs) = foldl (foldl f) (f z x) cs
+  foldl f z (Leaf x) = f z x
 
   foldr f z (Root x cs _) = f x $ foldr (flip $ foldr f) z cs
-  foldr f z (Container x cs _) = f x $ foldr (flip $ foldr f) z cs
-  foldr f z (Leaf x _) = f x z
+  foldr f z (Container x cs) = f x $ foldr (flip $ foldr f) z cs
+  foldr f z (Leaf x) = f x z
 
 instance Traversable Layout where
   traverse f (Root x cs ptr) =
     Root <$> f x <*> (sequenceA $ traverse f <$> cs) <*> pure ptr
-  traverse f (Container x cs ptr) =
-    Container <$> f x <*> (sequenceA $ traverse f <$> cs) <*> pure ptr
-  traverse f (Leaf x ptr) = Leaf <$> f x <*> pure ptr
+  traverse f (Container x cs) =
+    Container <$> f x <*> (sequenceA $ traverse f <$> cs)
+  traverse f (Leaf x) = Leaf <$> f x
 
   sequenceA (Root x cs ptr) =
     Root <$> x <*> sequenceA (sequenceA <$> cs) <*> pure ptr
-  sequenceA (Container x cs ptr) =
-    Container <$> x <*> sequenceA (sequenceA <$> cs) <*> pure ptr
-  sequenceA (Leaf x ptr) = Leaf <$> x <*> pure ptr
+  sequenceA (Container x cs) =
+    Container <$> x <*> sequenceA (sequenceA <$> cs)
+  sequenceA (Leaf x) = Leaf <$> x
 
 mkNode :: a -> IO (Layout a)
 mkNode x = do
@@ -176,14 +173,11 @@ justifiedContainer just cs x = do
 
   cs' <- flip mapM (zip cs [0..]) $ \((Root p children fptr), idx) -> do
     withForeignPtr fptr $ \oldptr -> do
-      parent <- c'YGNodeGetParent oldptr
-      newptr <- if parent == nullPtr
-                then return oldptr
-                else c'YGNodeClone oldptr
+      newptr <- c'YGNodeClone oldptr
       c'YGNodeInsertChild ptr newptr idx
       return $ if null children
-               then Leaf p newptr
-               else Container p children newptr
+               then Leaf p
+               else Container p children
   Root x cs' <$> newForeignPtr p'YGNodeFreeRecursive ptr
 
 assembleChildren :: Children a -> a -> IO (Layout a)
@@ -459,55 +453,31 @@ layoutInfo ptr = do
   height <- realToFrac <$> c'YGNodeLayoutGetHeight ptr
   return $ LayoutInfo top left width height
 
-renderTree :: (Functor m, Applicative m, Monad m) =>
-              LayoutInfo -> Layout a -> RenderFn m a b -> m (Layout b)
-renderTree parentInfo (Leaf x ptr) f = do
-  info <- return $ unsafePerformIO $ layoutInfo ptr
-  Leaf <$> f (layoutWithParent parentInfo info) x <*> pure ptr
-renderTree parentInfo (Container x cs ptr) f = do
+renderNodeWithChildren :: (Functor m, Applicative m, Monad m, Monoid b) =>
+                          LayoutInfo -> a -> [Layout a] -> Ptr C'YGNode
+                          -> RenderFn m a (b, c)
+                          -> m (b, c, [Layout c])
+renderNodeWithChildren parentInfo x children ptr f = do
   info <- return $ unsafePerformIO $ layoutInfo ptr
   let thisInfo = layoutWithParent parentInfo info
-  Container
-    <$> f thisInfo x
-    <*> mapM (flip (renderTree thisInfo) f) cs
-    <*> pure ptr
-renderTree parentInfo (Root x cs ptr) f = do
-  info <- return $ unsafePerformIO $ withForeignPtr ptr layoutInfo
-  let thisInfo = layoutWithParent parentInfo info
-  Root
-    <$> f thisInfo x
-    <*> mapM (flip (renderTree thisInfo) f) cs
-    <*> pure ptr
-
--- | Renders a layout with the user-supplied function. The renderer traverses
--- the tree from root node to children and transforms each payload using the
--- user-supplied function.
-render :: (Functor m, Applicative m, Monad m) =>
-          Layout a -> RenderFn m a b -> m (Layout b)
-render lyt f = do
-  _ <- (unsafePerformIO $ withNativePtr lyt calculateLayout) `seq` return ()
-  renderTree emptyInfo lyt f
+  (m, y) <- f thisInfo x
+  cs <- flip mapM (zip children [0..]) $ \(child, childIdx) -> do
+    childPtr <- return $ unsafePerformIO $ c'YGNodeGetChild ptr childIdx
+    foldRenderTree thisInfo child childPtr f
+  return (mappend m . foldr mappend mempty . map fst $ cs, y, map snd cs)
 
 foldRenderTree :: (Functor m, Applicative m, Monad m, Monoid b) =>
-                  LayoutInfo -> Layout a -> RenderFn m a (b, c) -> m (b, Layout c)
-foldRenderTree parentInfo (Leaf x ptr) f = do
-  info <- return $ unsafePerformIO $ layoutInfo ptr
-  (m, y) <- f (layoutWithParent parentInfo info) x
-  return (mappend m mempty, Leaf y ptr)
-foldRenderTree parentInfo (Container x cs ptr) f = do
-  info <- return $ unsafePerformIO $ layoutInfo ptr
-  let thisInfo = layoutWithParent parentInfo info
-  (m, y) <- f thisInfo x
-  cs' <- mapM (flip (foldRenderTree thisInfo) f) cs
-  return (mappend m . foldr mappend mempty . map fst $ cs',
-          Container y (map snd cs') ptr)
-foldRenderTree parentInfo (Root x cs ptr) f = do
-  info <- return $ unsafePerformIO $ withForeignPtr ptr layoutInfo
-  let thisInfo = layoutWithParent parentInfo info
-  (m, y) <- f thisInfo x
-  cs' <- mapM (flip (foldRenderTree thisInfo) f) cs
-  return (mappend m . foldr mappend mempty . map fst $ cs',
-          Root y (map snd cs') ptr)
+                  LayoutInfo -> Layout a -> Ptr C'YGNode -> RenderFn m a (b, c) ->
+                  m (b, Layout c)
+foldRenderTree parentInfo (Root x children fptr) ptr f = do
+  (result, y, cs) <- renderNodeWithChildren parentInfo x children ptr f
+  return $ (result, Root y cs fptr)
+foldRenderTree parentInfo (Container x children) ptr f = do
+  (result, y, cs) <- renderNodeWithChildren parentInfo x children ptr f
+  return $ (result, Container y cs)
+foldRenderTree parentInfo (Leaf x) ptr f = do
+  (result, y, []) <- renderNodeWithChildren parentInfo x [] ptr f
+  return $ (result, Leaf y)
 
 -- | Renders a layout with the user-supplied function. For each return value
 -- of type '(b, c)', we append the first result to the output of the previous
@@ -516,6 +486,18 @@ foldRenderTree parentInfo (Root x cs ptr) f = do
 -- a new layout with payloads of type 'c'.
 foldRender :: (Functor m, Applicative m, Monad m, Monoid b) =>
               Layout a -> RenderFn m a (b, c) -> m (b, Layout c)
-foldRender lyt f = do
-  _ <- (unsafePerformIO $ withNativePtr lyt calculateLayout) `seq` return ()
-  foldRenderTree emptyInfo lyt f
+foldRender lyt@(Root _ _ fptr) f = do
+  rootPtr <- return $ unsafePerformIO $ withForeignPtr fptr $ \ptr -> do
+    calculateLayout ptr
+    return ptr
+  foldRenderTree emptyInfo lyt rootPtr f
+foldRender _ _ = error "Internal: Rendering must be done from the root node"
+
+-- | Renders a layout with the user-supplied function. The renderer traverses
+-- the tree from root node to children and transforms each payload using the
+-- user-supplied function.
+render :: (Functor m, Applicative m, Monad m) =>
+          Layout a -> RenderFn m a b -> m (Layout b)
+render lyt f =
+  let f' lytInfo x = ((,) ()) <$> f lytInfo x
+  in snd <$> foldRender lyt f'
