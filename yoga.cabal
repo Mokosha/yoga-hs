@@ -47,7 +47,6 @@ library
   include-dirs:     yoga/
   install-includes: YGEnums.h
                     YGMacros.h
-                    YGMemFuncs.h
                     YGNodePrint.h
                     Yoga.h
                     Yoga-internal.h
