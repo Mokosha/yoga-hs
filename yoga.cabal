@@ -2,7 +2,7 @@
 -- see http://haskell.org/cabal/users-guide/
 
 name:                yoga
-version:             0.0.0.2
+version:             0.0.0.3
 synopsis:            Bindings to Facebook's Yoga layout library
 description:         The <https://facebook.github.com/yoga Yoga> library from
                      <https://facebook.github.com/ Facebook> is a fast layout engine
