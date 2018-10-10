@@ -2,7 +2,7 @@
 -- see http://haskell.org/cabal/users-guide/
 
 name:                yoga
-version:             0.0.0.3
+version:             0.0.0.4
 synopsis:            Bindings to Facebook's Yoga layout library
 description:         The <https://facebook.github.com/yoga Yoga> library from
                      <https://facebook.github.com/ Facebook> is a fast layout engine
@@ -48,12 +48,13 @@ library
   install-includes: YGEnums.h
                     YGMacros.h
                     YGNodePrint.h
-                    Yoga.h
-                    Yoga-internal.h
                     YGConfig.h
                     YGFloatOptional.h
                     YGLayout.h
                     YGNode.h
+                    YGStyle.h
+                    Yoga.h
+                    Yoga-internal.h
                     Utils.h
 
   c-sources:        yoga/YGNodePrint.cpp
