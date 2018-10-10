@@ -54,7 +54,7 @@ library
                     yoga/Yoga.cpp
                     yoga/YGEnums.cpp
 
-  cc-options:       -Dnullptr=NULL
+  cc-options:       -Dnullptr=0
   extra-libraries:  stdc++
 
   exposed-modules:

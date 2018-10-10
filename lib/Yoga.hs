@@ -476,8 +476,8 @@ foldRenderTree parentInfo (Container x children) ptr f = do
   (result, y, cs) <- renderNodeWithChildren parentInfo x children ptr f
   return $ (result, Container y cs)
 foldRenderTree parentInfo (Leaf x) ptr f = do
-  (result, y, []) <- renderNodeWithChildren parentInfo x [] ptr f
-  return $ (result, Leaf y)
+  (result, y, cs) <- renderNodeWithChildren parentInfo x [] ptr f
+  return $ cs `seq` (result, Leaf y)
 
 -- | Renders a layout with the user-supplied function. For each return value
 -- of type '(b, c)', we append the first result to the output of the previous
