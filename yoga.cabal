@@ -50,9 +50,21 @@ library
                     YGNodePrint.h
                     Yoga.h
                     Yoga-internal.h
+                    YGConfig.h
+                    YGFloatOptional.h
+                    YGLayout.h
+                    YGNode.h
+                    Utils.h
+
   c-sources:        yoga/YGNodePrint.cpp
                     yoga/Yoga.cpp
                     yoga/YGEnums.cpp
+                    yoga/YGConfig.cpp
+                    yoga/YGFloatOptional.cpp
+                    yoga/YGLayout.cpp
+                    yoga/YGNode.cpp
+                    yoga/YGStyle.cpp
+                    yoga/Utils.cpp
 
   cc-options:       -Dnullptr=0
   extra-libraries:  stdc++
