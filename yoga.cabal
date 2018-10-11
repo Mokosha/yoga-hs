@@ -2,7 +2,7 @@
 -- see http://haskell.org/cabal/users-guide/
 
 name:                yoga
-version:             0.0.0.4
+version:             0.0.0.5
 synopsis:            Bindings to Facebook's Yoga layout library
 description:         The <https://facebook.github.com/yoga Yoga> library from
                      <https://facebook.github.com/ Facebook> is a fast layout engine
@@ -67,7 +67,7 @@ library
                     yoga/YGStyle.cpp
                     yoga/Utils.cpp
 
-  cc-options:       -Dnullptr=0
+  cc-options:       -Dnullptr=0 -std=c++11
   extra-libraries:  stdc++
 
   exposed-modules:
