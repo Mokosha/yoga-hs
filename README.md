@@ -1,4 +1,5 @@
 # yoga-hs
+[![Build Status](https://travis-ci.org/Mokosha/yoga-hs.svg?branch=master)](https://travis-ci.org/Mokosha/yoga-hs)
 Haskell bindings to [Facebook's Yoga layout library](https://facebook.github.io/yoga/).
 ------
 
