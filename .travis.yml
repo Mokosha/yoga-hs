@@ -72,35 +72,30 @@ matrix:
   - env:
       - BUILD=stack
       - ARGS="--resolver lts-5"
-      - MATRIX_EVAL="brew update && brew install gcc && CC=gcc-7 && CXX=g++-7"
     osx_image: xcode8
     os: osx
 
   - env:
       - BUILD=stack
       - ARGS="--resolver lts-9"
-      - MATRIX_EVAL="brew update && brew install gcc && CC=gcc-7 && CXX=g++-7"
     osx_image: xcode8
     os: osx
 
   - env:
       - BUILD=stack
       - ARGS="--resolver lts-11"
-      - MATRIX_EVAL="brew update && brew install gcc && CC=gcc-7 && CXX=g++-7"
     osx_image: xcode8
     os: osx
 
   - env:
       - BUILD=stack
       - ARGS="--resolver lts-12"
-      - MATRIX_EVAL="brew update && brew install gcc && CC=gcc-7 && CXX=g++-7"
     osx_image: xcode8
     os: osx
 
   - env:
       - BUILD=stack
       - ARGS="--resolver nightly"
-      - MATRIX_EVAL="brew update && brew install gcc && CC=gcc-7 && CXX=g++-7"
     osx_image: xcode8
     os: osx
 
@@ -109,10 +104,9 @@ matrix:
   - env: BUILD=stack ARGS="--resolver nightly"
 
 before_install:
-- eval "${MATRIX_EVAL}"
+- CABALARGS=""
 
 # We want to always allow newer versions of packages when building on GHC HEAD
-- CABALARGS=""
 - if [ "x$GHCVER" = "xhead" ]; then CABALARGS=--allow-newer; fi
 
 # Download and unpack the stack executable
@@ -121,6 +115,10 @@ before_install:
 - |
   if [ `uname` = "Darwin" ]
   then
+    brew update
+    brew install gcc
+    export CC=gcc-7
+    export CXX=g++-7
     curl --insecure -L https://www.stackage.org/stack/osx-x86_64 | tar xz --strip-components=1 --include '*/stack' -C ~/.local/bin
   else
     curl -L https://www.stackage.org/stack/linux-x86_64 | tar xz --wildcards --strip-components=1 -C ~/.local/bin '*/stack'
