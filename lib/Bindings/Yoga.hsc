@@ -47,6 +47,7 @@ YGSetMemoryFuncs(YGMalloc ygmalloc, YGCalloc yccalloc, YGRealloc ygrealloc, YGFr
 -}
 
 #ccall YGNodeNew, IO (Ptr <YGNode>)
+-- #ccall YGNodeNewWithConfig, Ptr <YGConfig> -> IO (Ptr <YGNode>)
 #ccall YGNodeClone, Ptr <YGNode> -> IO (Ptr <YGNode>)
 #ccall YGNodeFree, Ptr <YGNode> -> IO ()
 #ccall YGNodeFreeRecursive, Ptr <YGNode> -> IO ()
