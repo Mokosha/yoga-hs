@@ -56,7 +56,7 @@ import Data.Foldable
 import Data.Traversable
 import Data.Monoid
 
-import Foreign.C.Types (CFloat, CInt)
+import Foreign.C.Types (CFloat, CUInt)
 import Foreign.ForeignPtr
 
 import GHC.Ptr (Ptr)
@@ -165,7 +165,7 @@ wrapped :: Children a -> Children a
 wrapped (Wrap xs) = Wrap xs
 wrapped childs = childs
 
-justifiedContainer :: CInt -> [Layout a] -> a -> IO (Layout a)
+justifiedContainer :: CUInt -> [Layout a] -> a -> IO (Layout a)
 justifiedContainer just cs x = do
   ptr <- c'YGNodeNew
   c'YGNodeStyleSetJustifyContent ptr just
@@ -196,7 +196,7 @@ assembleChildren (Wrap cs) x = assembleChildren cs x >>= wrapContainer
         c'YGNodeStyleSetFlexWrap ptr c'YGWrapWrap
       return lyt
 
-setContainerDirection :: CInt -> CInt -> Layout a -> IO ()
+setContainerDirection :: CUInt -> CUInt -> Layout a -> IO ()
 setContainerDirection dir flexDir lyt =
   withNativePtr lyt $ \ptr -> do
     c'YGNodeStyleSetDirection ptr dir
@@ -350,7 +350,7 @@ data Edge
   | Edge'All
   deriving (Eq, Ord, Bounded, Enum, Read, Show)
 
-setMargin :: CInt -> Float -> Layout a -> IO (Layout a)
+setMargin :: CUInt -> Float -> Layout a -> IO (Layout a)
 setMargin edge px node = do
   withNativePtr node $ \ptr -> c'YGNodeStyleSetMargin ptr edge $ realToFrac px
   return node
@@ -380,7 +380,7 @@ withMargin Edge'Vertical px mkNodeFn x =
 withMargin Edge'All px mkNodeFn x =
   unsafePerformIO $ setMargin c'YGEdgeAll px (mkNodeFn x)
 
-setPadding :: CInt -> Float -> Layout a -> IO (Layout a)
+setPadding :: CUInt -> Float -> Layout a -> IO (Layout a)
 setPadding edge px node = do
   withNativePtr node $ \ptr ->
     c'YGNodeStyleSetPadding ptr edge $ realToFrac px

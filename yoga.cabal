@@ -46,36 +46,47 @@ library
   build-tool-depends: hsc2hs:hsc2hs >= 0.68
   include-dirs:       yoga/
                     , yoga/yoga/
-  install-includes:   BitUtils.h
-                      CompactValue.h
-                      event/event.h
-                      internal/experiments.h
-                      internal/experiments-inl.h
-                      log.h
-                      Utils.h
-                      YGConfig.h
-                      YGEnums.h
+  install-includes:   YGConfig.h
                       YGFloatOptional.h
-                      YGLayout.h
                       YGMacros.h
-                      YGNode.h
                       YGNodePrint.h
+                      event/event.h
+                      internal/experiments-inl.h
+                      internal/experiments.h
+                      log.h
+                      Bitfield.h
+                      CompactValue.h
+                      Utils.h
+                      YGEnums.h
+                      YGLayout.h
+                      YGNode.h
                       YGStyle.h
                       YGValue.h
-                      Yoga.h
                       Yoga-internal.h
+                      Yoga.h 
 
-  cxx-sources:        yoga/yoga/Yoga.cpp
-                      yoga/yoga/YGValue.cpp
-                      yoga/yoga/YGStyle.cpp
-                      yoga/yoga/YGNodePrint.cpp
-                      yoga/yoga/YGNode.cpp
+  c-sources:          lib/Bindings/glue.c
+  cxx-sources:        yoga/yoga/YGConfig.cpp
                       yoga/yoga/YGLayout.cpp
-                      yoga/yoga/YGEnums.cpp
-                      yoga/yoga/YGConfig.cpp
+                      yoga/yoga/YGStyle.cpp
+                      yoga/yoga/YGValue.cpp
+                      yoga/yoga/event/event.cpp
+                      yoga/yoga/internal/experiments.cpp
                       yoga/yoga/Utils.cpp
+                      yoga/yoga/YGEnums.cpp
+                      yoga/yoga/YGNode.cpp
+                      yoga/yoga/YGNodePrint.cpp
+                      yoga/yoga/Yoga.cpp
+                      yoga/yoga/log.cpp
 
-  cxx-options:        -std=c++11
+  cxx-options:        -fno-omit-frame-pointer
+                      -fexceptions
+                      -fvisibility=hidden
+                      -ffunction-sections
+                      -fdata-sections
+                      -std=c++11
+                      -DYG_ENABLE_EVENTS
+
   extra-libraries:    stdc++
 
   exposed-modules:
