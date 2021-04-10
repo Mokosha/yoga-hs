@@ -258,7 +258,6 @@ deriving instance Typeable C'YGValue
 #ccall YGNodeLayoutGetBorder, Ptr <YGNode> -> <YGEdge> -> IO CFloat
 #ccall YGNodeLayoutGetPadding, Ptr <YGNode> -> <YGEdge> -> IO CFloat
 
--- TODO: Solve YGLogger
 -- #ccall YGConfigSetLogger, Ptr <YGConfig> -> <YGLogger> -> IO ()
 #ccall YGAssert, CBool -> CString -> IO ()
 #ccall YGAssertWithNode, Ptr <YGNode> -> CBool -> CString -> IO ()
