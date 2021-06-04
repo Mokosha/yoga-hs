@@ -54,7 +54,6 @@ library
                       internal/experiments-inl.h
                       internal/experiments.h
                       log.h
-                      Bitfield.h
                       CompactValue.h
                       Utils.h
                       YGEnums.h
