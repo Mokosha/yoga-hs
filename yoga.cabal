@@ -45,37 +45,54 @@ library
     ghc-options:      -fwarn-tabs
   build-tool-depends: hsc2hs:hsc2hs >= 0.68
   include-dirs:       yoga/
-  install-includes:   YGEnums.h
+                    , yoga/yoga/
+  install-includes:   YGConfig.h
+                      YGFloatOptional.h
                       YGMacros.h
                       YGNodePrint.h
-                      YGConfig.h
-                      YGFloatOptional.h
+                      event/event.h
+                      internal/experiments-inl.h
+                      internal/experiments.h
+                      log.h
+                      Bitfield.h
+                      CompactValue.h
+                      Utils.h
+                      YGEnums.h
                       YGLayout.h
                       YGNode.h
                       YGStyle.h
-                      Yoga.h
+                      YGValue.h
                       Yoga-internal.h
-                      Utils.h
+                      Yoga.h 
 
-  cxx-sources:        yoga/YGNodePrint.cpp
-                      yoga/Yoga.cpp
-                      yoga/YGEnums.cpp
-                      yoga/YGConfig.cpp
-                      yoga/YGFloatOptional.cpp
-                      yoga/YGLayout.cpp
-                      yoga/YGNode.cpp
-                      yoga/YGStyle.cpp
-                      yoga/Utils.cpp
+  c-sources:          lib/Bindings/glue.c
+  cxx-sources:        yoga/yoga/YGConfig.cpp
+                      yoga/yoga/YGLayout.cpp
+                      yoga/yoga/YGStyle.cpp
+                      yoga/yoga/YGValue.cpp
+                      yoga/yoga/event/event.cpp
+                      yoga/yoga/internal/experiments.cpp
+                      yoga/yoga/Utils.cpp
+                      yoga/yoga/YGEnums.cpp
+                      yoga/yoga/YGNode.cpp
+                      yoga/yoga/YGNodePrint.cpp
+                      yoga/yoga/Yoga.cpp
+                      yoga/yoga/log.cpp
 
-  cxx-options:        -std=c++11
+  cxx-options:        -fno-omit-frame-pointer
+                      -fexceptions
+                      -fvisibility=hidden
+                      -ffunction-sections
+                      -fdata-sections
+                      -std=c++11
+                      -DYG_ENABLE_EVENTS
+
   extra-libraries:    stdc++
 
   exposed-modules:
     Bindings.Yoga
-    Yoga
-
-  other-modules:
     Bindings.Yoga.Enums
+    Yoga
 
   build-depends:
     base            >= 4     && < 6,
@@ -88,13 +105,25 @@ flag                 examples
 
 executable yoga-example
   default-language: Haskell2010
-  main-is:        Main.hs
-  hs-source-dirs: examples
-  ghc-options:    -Wall -rtsopts -O3
-  build-depends:  base          >  4,
-                  yoga
+  main-is:          Main.hs
+  hs-source-dirs:   examples
+  ghc-options:      -Wall -rtsopts -O3
+  build-depends:    base          >  4,
+                    yoga
 
   if flag(examples)
     buildable:    True
   else
     buildable:    False
+
+test-suite spec
+  default-language:    Haskell2010
+  hs-source-dirs:      test
+  type:                exitcode-stdio-1.0
+  main-is:             Spec.hs
+  other-modules:       Bindings.YogaSpec
+  build-tool-depends:  hspec-discover:hspec-discover
+  build-depends:       base > 4,
+                       hspec >= 2.7,
+                       hspec-discover >= 2.7,
+                       yoga

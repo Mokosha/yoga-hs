@@ -12,12 +12,15 @@ module Bindings.Yoga where
 
 import Data.Data        (Data)
 import Data.Typeable    (Typeable)
-import Foreign.C.Types  (CFloat(..), CInt(..), CUInt(..))
+import Foreign.C.Types  (CFloat(..), CInt(..), CUInt(..), CBool(..), CDouble(..))
+import Foreign.C.String (CString)
 import Foreign.Ptr      (FunPtr, Ptr, plusPtr)
 import Foreign.Storable (Storable(..))
 
 import Prelude (Eq, IO, Show)
 import Prelude (($), return)
+
+import Bindings.Yoga.Enums
 --------------------------------------------------------------------------------
 
 #starttype struct YGSize
@@ -26,41 +29,56 @@ import Prelude (($), return)
 #stoptype
 deriving instance Typeable C'YGSize
 
+#opaque_t YGConfig
+deriving instance Typeable C'YGConfig
+deriving instance Data     C'YGConfig
+
 #opaque_t YGNode
 deriving instance Typeable C'YGNode
 deriving instance Data     C'YGNode
 
-#callback_t YGMeasureFunc, Ptr <YGNode> -> CFloat -> CInt -> CFloat -> CInt -> IO (Ptr <YGSize>)
+#starttype struct YGValue
+#field value , CFloat
+#field unit  , <YGUnit>
+#stoptype
+deriving instance Typeable C'YGValue
 
+#globalvar YGValueAuto      , <YGValue>
+#globalvar YGValueUndefined , <YGValue>
+#globalvar YGValueZero      , <YGValue>
+
+#callback_t YGMeasureFunc, Ptr <YGNode> -> CFloat -> <YGMeasureMode> -> CFloat -> <YGMeasureMode> -> IO (Ptr <YGSize>)
+#callback_t YGBaselineFunc, Ptr <YGNode> -> CFloat -> CFloat -> IO CFloat
+#callback_t YGDirtiedFunc, Ptr <YGNode> -> IO ()
 #callback_t YGPrintFunc, Ptr <YGNode> -> IO ()
-{--
-typedef int (*YGLogger)(YGLogLevel level, const char *format, va_list args);
-WIN_EXPORT void YGSetLogger(YGLogger logger);
-WIN_EXPORT void YGLog(YGLogLevel level, const char *message, ...);
-
-typedef void *(*YGMalloc)(size_t size);
-typedef void *(*YGCalloc)(size_t count, size_t size);
-typedef void *(*YGRealloc)(void *ptr, size_t size);
-typedef void (*YGFree)(void *ptr);
-WIN_EXPORT void
-YGSetMemoryFuncs(YGMalloc ygmalloc, YGCalloc yccalloc, YGRealloc ygrealloc, YGFree ygfree);
--}
+#callback_t YGNodeCleanupFunc, Ptr <YGNode> -> IO ()
+-- #callback_t YGLogger, Ptr <YGConfig> -> Ptr <YGNode> -> <YGLogLevel> -> CString -> <va_list> -> IO CInt
+#callback_t YGCloneNodeFunc, Ptr <YGNode> -> Ptr <YGNode> -> CInt -> IO (Ptr <YGNode>)
 
 #ccall YGNodeNew, IO (Ptr <YGNode>)
+#ccall YGNodeNewWithConfig, Ptr <YGConfig> -> IO (Ptr <YGNode>)
 #ccall YGNodeClone, Ptr <YGNode> -> IO (Ptr <YGNode>)
 #ccall YGNodeFree, Ptr <YGNode> -> IO ()
+#ccall YGNodeFreeRecursiveWithCleanupFunc, Ptr <YGNode> -> <YGNodeCleanupFunc> -> IO ()
 #ccall YGNodeFreeRecursive, Ptr <YGNode> -> IO ()
 #ccall YGNodeReset, Ptr <YGNode> -> IO ()
-#ccall YGNodeGetInstanceCount, IO (CInt)
 
 #ccall YGNodeInsertChild, Ptr <YGNode> -> Ptr <YGNode> -> CUInt -> IO ()
+#ccall YGNodeSwapChild, Ptr <YGNode> -> Ptr <YGNode> -> CUInt -> IO ()
+
 #ccall YGNodeRemoveChild, Ptr <YGNode> -> Ptr <YGNode> -> IO ()
 #ccall YGNodeRemoveAllChildren, Ptr <YGNode> -> IO ()
 #ccall YGNodeGetChild, Ptr <YGNode> -> CUInt -> IO (Ptr <YGNode>)
+#ccall YGNodeGetOwner, Ptr <YGNode> -> IO (Ptr <YGNode>)
 #ccall YGNodeGetParent, Ptr <YGNode> -> IO (Ptr <YGNode>)
-#ccall YGNodeGetChildCount, Ptr <YGNode> -> IO (CUInt)
+#ccall YGNodeGetChildCount, Ptr <YGNode> -> IO CUInt
+#ccall YGNodeSetChildren, Ptr <YGNode> -> Ptr (Ptr <YGNode>) -> CUInt -> IO ()
 
-#ccall YGNodeCalculateLayout, Ptr <YGNode> -> CFloat -> CFloat -> CInt -> IO ()
+#ccall YGNodeSetIsReferenceBaseline, Ptr <YGNode> -> CBool -> IO ()
+#ccall YGNodeIsReferenceBaseline, Ptr <YGNode> -> IO CBool
+
+#ccall YGNodeCalculateLayout, Ptr <YGNode> -> CFloat -> CFloat -> <YGDirection> -> IO ()
+
 
 -- Mark a node as dirty. Only valid for nodes with a custom measure function
 -- set.
@@ -68,99 +86,156 @@ YGSetMemoryFuncs(YGMalloc ygmalloc, YGCalloc yccalloc, YGRealloc ygrealloc, YGFr
 -- measure functions
 -- depends on information not known to YG they must perform this dirty
 -- marking manually.
-
 #ccall YGNodeMarkDirty, Ptr <YGNode> -> IO ()
-#ccall YGNodeIsDirty, Ptr <YGNode> -> IO CInt
 
-#ccall YGNodePrint, Ptr <YGNode> -> CInt -> IO ()
+-- Marks the current node and all its descendants as dirty.
+--
+-- Intended to be used for Yoga benchmarks. Don't use in production, as calling
+-- `YGCalculateLayout` will cause the recalculation of each and every node.
+#ccall YGNodeMarkDirtyAndPropogateToDescendants, Ptr <YGNode> -> IO ()
 
-#ccall YGNodeCanUseCachedMeasurement, CInt -> CFloat -> CInt -> CFloat -> CInt -> CFloat -> CInt -> CFloat -> CFloat -> CFloat -> CFloat -> CFloat -> IO CInt
+-- ifdef DEBUG only
+-- #ccall YGNodePrint, Ptr <YGNode> -> <YGPrintOptions> -> IO ()
+
+#ccall YGFloatIsUndefined, CFloat -> IO CBool
+
+#ccall YGNodeCanUseCachedMeasurement, \
+    <YGMeasureMode> -> CFloat -> <YGMeasureMode> -> CFloat -> \
+    <YGMeasureMode> -> CFloat -> <YGMeasureMode> -> CFloat -> \
+    CFloat -> CFloat -> CFloat -> CFloat -> Ptr <YGConfig> -> IO CBool
 
 #ccall YGNodeCopyStyle, Ptr <YGNode> -> Ptr <YGNode> -> IO ()
 
 #ccall YGNodeSetContext, Ptr <YGNode> -> Ptr () -> IO ()
 #ccall YGNodeGetContext, Ptr <YGNode> -> IO (Ptr ())
-
+#ccall YGConfigSetPrintTreeFlag, Ptr <YGConfig> -> CBool -> IO ()
+#ccall YGNodeHasMeasureFunc, Ptr <YGNode> -> IO CBool
 #ccall YGNodeSetMeasureFunc, Ptr <YGNode> -> Ptr <YGMeasureFunc> -> IO ()
-#ccall YGNodeGetMeasureFunc, Ptr <YGNode> -> IO (Ptr <YGMeasureFunc>)
-
+#ccall YGNodeHasBaselineFunc, Ptr <YGNode> -> IO CBool
+#ccall YGNodeSetBaselineFunc, Ptr <YGNode> -> <YGBaselineFunc> -> IO ()
+#ccall YGNodeGetDirtiedFunc, Ptr <YGNode> -> IO <YGDirtiedFunc>
+#ccall YGNodeSetDirtiedFunc, Ptr <YGNode> -> <YGDirtiedFunc> -> IO ()
 #ccall YGNodeSetPrintFunc, Ptr <YGNode> -> Ptr <YGPrintFunc> -> IO ()
-#ccall YGNodeGetPrintFunc, Ptr <YGNode> -> IO (Ptr <YGPrintFunc>)
+#ccall YGNodeGetHasNewLayout, Ptr <YGNode> -> IO CBool
+#ccall YGNodeSetHasNewLayout, Ptr <YGNode> -> CBool -> IO ()
+#ccall YGNodeGetNodeType, Ptr <YGNode> -> IO <YGNodeType>
+#ccall YGNodeSetNodeType, Ptr <YGNode> -> <YGNodeType> -> IO ()
+#ccall YGNodeIsDirty, Ptr <YGNode> -> IO CBool
+#ccall YGNodeLayoutGetDidUseLegacyFlag, Ptr <YGNode> -> IO CBool
 
-#ccall YGNodeSetHasNewLayout, Ptr <YGNode> -> CInt -> IO ()
-#ccall YGNodeGetHasNewLayout, Ptr <YGNode> -> IO CInt
+#ccall YGNodeStyleSetDirection, Ptr <YGNode> -> <YGDirection> -> IO ()
+#ccall YGNodeStyleGetDirection, Ptr <YGNode> -> IO <YGDirection>
 
-#ccall YGNodeStyleSetDirection, Ptr <YGNode> -> CInt -> IO ()
-#ccall YGNodeStyleGetDirection, Ptr <YGNode> -> IO CInt
+#ccall YGNodeStyleSetFlexDirection, Ptr <YGNode> -> <YGFlexDirection> -> IO ()
+#ccall YGNodeStyleGetFlexDirection, Ptr <YGNode> -> IO <YGFlexDirection>
 
-#ccall YGNodeStyleSetFlexDirection, Ptr <YGNode> -> CInt -> IO ()
-#ccall YGNodeStyleGetFlexDirection, Ptr <YGNode> -> IO CInt
+#ccall YGNodeStyleSetJustifyContent, Ptr <YGNode> -> <YGJustify> -> IO ()
+#ccall YGNodeStyleGetJustifyContent, Ptr <YGNode> -> IO <YGJustify>
 
-#ccall YGNodeStyleSetJustifyContent, Ptr <YGNode> -> CInt -> IO ()
-#ccall YGNodeStyleGetJustifyContent, Ptr <YGNode> -> IO CInt
+#ccall YGNodeStyleSetAlignContent, Ptr <YGNode> -> <YGAlign> -> IO ()
+#ccall YGNodeStyleGetAlignContent, Ptr <YGNode> -> IO <YGAlign>
 
-#ccall YGNodeStyleSetAlignContent, Ptr <YGNode> -> CInt -> IO ()
-#ccall YGNodeStyleGetAlignContent, Ptr <YGNode> -> IO CInt
+#ccall YGNodeStyleSetAlignItems, Ptr <YGNode> -> <YGAlign> -> IO ()
+#ccall YGNodeStyleGetAlignItems, Ptr <YGNode> -> IO <YGAlign>
 
-#ccall YGNodeStyleSetAlignItems, Ptr <YGNode> -> CInt -> IO ()
-#ccall YGNodeStyleGetAlignItems, Ptr <YGNode> -> IO CInt
+#ccall YGNodeStyleSetAlignSelf, Ptr <YGNode> -> <YGAlign> -> IO ()
+#ccall YGNodeStyleGetAlignSelf, Ptr <YGNode> -> IO <YGAlign>
 
-#ccall YGNodeStyleSetAlignSelf, Ptr <YGNode> -> CInt -> IO ()
-#ccall YGNodeStyleGetAlignSelf, Ptr <YGNode> -> IO CInt
+#ccall YGNodeStyleSetPositionType, Ptr <YGNode> -> <YGPositionType> -> IO ()
+#ccall YGNodeStyleGetPositionType, Ptr <YGNode> -> IO <YGPositionType>
 
-#ccall YGNodeStyleSetPositionType, Ptr <YGNode> -> CInt -> IO ()
-#ccall YGNodeStyleGetPositionType, Ptr <YGNode> -> IO CInt
+#ccall YGNodeStyleSetFlexWrap, Ptr <YGNode> -> <YGWrap> -> IO ()
+#ccall YGNodeStyleGetFlexWrap, Ptr <YGNode> -> IO <YGWrap>
 
-#ccall YGNodeStyleSetFlexWrap, Ptr <YGNode> -> CInt -> IO ()
-#ccall YGNodeStyleGetFlexWrap, Ptr <YGNode> -> IO CInt
+#ccall YGNodeStyleSetOverflow, Ptr <YGNode> -> <YGOverflow> -> IO ()
+#ccall YGNodeStyleGetOverflow, Ptr <YGNode> -> IO <YGOverflow>
 
-#ccall YGNodeStyleSetOverflow, Ptr <YGNode> -> CInt -> IO ()
-#ccall YGNodeStyleGetOverflow, Ptr <YGNode> -> IO CInt
+#ccall YGNodeStyleSetDisplay, Ptr <YGNode> -> <YGDisplay> -> IO ()
+#ccall YGNodeStyleGetDisplay, Ptr <YGNode> -> IO <YGDisplay>
 
 #ccall YGNodeStyleSetFlex, Ptr <YGNode> -> CFloat -> IO ()
+#ccall YGNodeStyleGetFlex, Ptr <YGNode> -> IO CFloat
+
 #ccall YGNodeStyleSetFlexGrow, Ptr <YGNode> -> CFloat -> IO ()
 #ccall YGNodeStyleGetFlexGrow, Ptr <YGNode> -> IO CFloat
+
 #ccall YGNodeStyleSetFlexShrink, Ptr <YGNode> -> CFloat -> IO ()
 #ccall YGNodeStyleGetFlexShrink, Ptr <YGNode> -> IO CFloat
+
 #ccall YGNodeStyleSetFlexBasis, Ptr <YGNode> -> CFloat -> IO ()
-#ccall YGNodeStyleGetFlexBasis, Ptr <YGNode> -> IO CFloat
+#ccall YGNodeStyleSetFlexBasisPercent, Ptr <YGNode> -> CFloat -> IO ()
+#ccall YGNodeStyleSetFlexBasisAuto, Ptr <YGNode> -> IO ()
+-- #ccall YGNodeStyleGetFlexBasis, Ptr <YGNode> -> IO <YGValue>
+#ccall YGNodeStyleGetFlexBasisWrapper, Ptr <YGNode> -> IO (Ptr <YGValue>)
 
-#ccall YGNodeStyleSetPosition, Ptr <YGNode> -> CInt -> CFloat -> IO ()
-#ccall YGNodeStyleGetPosition, Ptr <YGNode> -> CInt -> IO CFloat
+#ccall YGNodeStyleSetPosition, Ptr <YGNode> -> <YGEdge> -> CFloat -> IO ()
+#ccall YGNodeStyleSetPositionPercent, Ptr <YGNode> -> <YGEdge> -> CFloat -> IO ()
+-- #ccall YGNodeStyleGetPosition, Ptr <YGNode> -> <YGEdge> -> IO <YGValue>
+#ccall YGNodeStyleGetPositionWrapper, Ptr <YGNode> -> <YGEdge> -> IO (Ptr <YGValue>)
 
-#ccall YGNodeStyleSetMargin, Ptr <YGNode> -> CInt -> CFloat -> IO ()
-#ccall YGNodeStyleGetMargin, Ptr <YGNode> -> CInt -> IO CFloat
+#ccall YGNodeStyleSetMargin, Ptr <YGNode> -> <YGEdge> -> CFloat -> IO ()
+#ccall YGNodeStyleSetMarginPercent, Ptr <YGNode> -> <YGEdge> -> CFloat -> IO ()
+#ccall YGNodeStyleSetMarginAuto, Ptr <YGNode> -> <YGEdge> -> IO ()
+-- #ccall YGNodeStyleGetMargin, Ptr <YGNode> -> <YGEdge> -> IO <YGValue>
+#ccall YGNodeStyleGetMarginWrapper, Ptr <YGNode> -> <YGEdge> -> IO (Ptr <YGValue>)
 
-#ccall YGNodeStyleSetPadding, Ptr <YGNode> -> CInt -> CFloat -> IO ()
-#ccall YGNodeStyleGetPadding, Ptr <YGNode> -> CInt -> IO CFloat
+#ccall YGNodeStyleSetPadding, Ptr <YGNode> -> <YGEdge> -> CFloat -> IO ()
+#ccall YGNodeStyleSetPaddingPercent, Ptr <YGNode> -> <YGEdge> -> CFloat -> IO ()
+-- #ccall YGNodeStyleGetPadding, Ptr <YGNode> -> <YGEdge> -> IO <YGValue>
+#ccall YGNodeStyleGetPaddingWrapper, Ptr <YGNode> -> <YGEdge> -> IO (Ptr <YGValue>)
 
-#ccall YGNodeStyleSetBorder, Ptr <YGNode> -> CInt -> CFloat -> IO ()
-#ccall YGNodeStyleGetBorder, Ptr <YGNode> -> CInt -> IO CFloat
+#ccall YGNodeStyleSetBorder, Ptr <YGNode> -> <YGEdge> -> CFloat -> IO ()
+#ccall YGNodeStyleGetBorder, Ptr <YGNode> -> <YGEdge> -> IO CFloat
 
 #ccall YGNodeStyleSetWidth, Ptr <YGNode> -> CFloat -> IO ()
-#ccall YGNodeStyleGetWidth, Ptr <YGNode> -> IO CFloat
+#ccall YGNodeStyleSetWidthPercent, Ptr <YGNode> -> CFloat -> IO ()
+#ccall YGNodeStyleSetWidthAuto, Ptr <YGNode> -> IO ()
+-- #ccall YGNodeStyleGetWidth, Ptr <YGNode> -> IO <YGValue>
+#ccall YGNodeStyleGetWidthWrapper, Ptr <YGNode> -> IO (Ptr <YGValue>)
+
 #ccall YGNodeStyleSetHeight, Ptr <YGNode> -> CFloat -> IO ()
-#ccall YGNodeStyleGetHeight, Ptr <YGNode> -> IO CFloat
+#ccall YGNodeStyleSetHeightPercent, Ptr <YGNode> -> CFloat -> IO ()
+#ccall YGNodeStyleSetHeightAuto, Ptr <YGNode> -> IO ()
+-- #ccall YGNodeStyleGetHeight, Ptr <YGNode> -> IO <YGValue>
+#ccall YGNodeStyleGetHeightWrapper, Ptr <YGNode> -> IO (Ptr <YGValue>)
 
 #ccall YGNodeStyleSetMinWidth, Ptr <YGNode> -> CFloat -> IO ()
-#ccall YGNodeStyleGetMinWidth, Ptr <YGNode> -> IO CFloat
+#ccall YGNodeStyleSetMinWidthPercent, Ptr <YGNode> -> CFloat -> IO ()
+-- #ccall YGNodeStyleGetMinWidth, Ptr <YGNode> -> IO <YGValue>
+#ccall YGNodeStyleGetMinWidthWrapper, Ptr <YGNode> -> IO (Ptr <YGValue>)
+
 #ccall YGNodeStyleSetMinHeight, Ptr <YGNode> -> CFloat -> IO ()
-#ccall YGNodeStyleGetMinHeight, Ptr <YGNode> -> IO CFloat
+#ccall YGNodeStyleSetMinHeightPercent, Ptr <YGNode> -> CFloat -> IO ()
+-- #ccall YGNodeStyleGetMinHeight, Ptr <YGNode> -> IO <YGValue>
+#ccall YGNodeStyleGetMinHeightWrapper, Ptr <YGNode> -> IO (Ptr <YGValue>)
 
 #ccall YGNodeStyleSetMaxWidth, Ptr <YGNode> -> CFloat -> IO ()
-#ccall YGNodeStyleGetMaxWidth, Ptr <YGNode> -> IO CFloat
-#ccall YGNodeStyleSetMaxHeight, Ptr <YGNode> -> CFloat -> IO ()
-#ccall YGNodeStyleGetMaxHeight, Ptr <YGNode> -> IO CFloat
+#ccall YGNodeStyleSetMaxWidthPercent, Ptr <YGNode> -> CFloat -> IO ()
+-- #ccall YGNodeStyleGetMaxWidth, Ptr <YGNode> -> IO <YGValue>
+#ccall YGNodeStyleGetMaxWidthWrapper, Ptr <YGNode> -> IO (Ptr <YGValue>)
 
--- Yoga specific properties, not compatible with flexbox specification
--- Aspect ratio control the size of the undefined dimension of a node.
--- - On a node with a set width/height aspect ratio control the size of the unset dimension
--- - On a node with a set flex basis aspect ratio controls the size of the node in the cross axis if
--- unset
--- - On a node with a measure function aspect ratio works as though the measure function measures
--- the flex basis
--- - On a node with flex grow/shrink aspect ratio controls the size of the node in the cross axis if
--- unset
+#ccall YGNodeStyleSetMaxHeight, Ptr <YGNode> -> CFloat -> IO ()
+#ccall YGNodeStyleSetMaxHeightPercent, Ptr <YGNode> -> CFloat -> IO ()
+-- #ccall YGNodeStyleGetMaxHeight, Ptr <YGNode> -> IO <YGValue>
+#ccall YGNodeStyleGetMaxHeightWrapper, Ptr <YGNode> -> IO (Ptr <YGValue>)
+
+-- YGValue wrapper
+#ccall YGValueFree, Ptr <YGValue> -> IO ()
+
+-- Yoga specific properties, not compatible with flexbox specification Aspect
+-- ratio control the size of the undefined dimension of a node. Aspect ratio is
+-- encoded as a floating point value width/height. e.g. A value of 2 leads to a
+-- node with a width twice the size of its height while a value of 0.5 gives the
+-- opposite effect.
+--
+-- - On a node with a set width/height aspect ratio control the size of the
+--   unset dimension
+-- - On a node with a set flex basis aspect ratio controls the size of the node
+--   in the cross axis if unset
+-- - On a node with a measure function aspect ratio works as though the measure
+--   function measures the flex basis
+-- - On a node with flex grow/shrink aspect ratio controls the size of the node
+--   in the cross axis if unset
 -- - Aspect ratio takes min/max dimensions into account
 #ccall YGNodeStyleSetAspectRatio, Ptr <YGNode> -> CFloat -> IO ()
 #ccall YGNodeStyleGetAspectRatio, Ptr <YGNode> -> IO CFloat
@@ -171,4 +246,53 @@ YGSetMemoryFuncs(YGMalloc ygmalloc, YGCalloc yccalloc, YGRealloc ygrealloc, YGFr
 #ccall YGNodeLayoutGetBottom, Ptr <YGNode> -> IO CFloat
 #ccall YGNodeLayoutGetWidth, Ptr <YGNode> -> IO CFloat
 #ccall YGNodeLayoutGetHeight, Ptr <YGNode> -> IO CFloat
-#ccall YGNodeLayoutGetDirection, Ptr <YGNode> -> IO CInt
+#ccall YGNodeLayoutGetDirection, Ptr <YGNode> -> IO <YGDirection>
+#ccall YGNodeLayoutGetHadOverflow, Ptr <YGNode> -> IO CBool
+#ccall YGNodeLayoutGetDidLegacyStretchFlagAffectLayout, Ptr <YGNode> -> IO CBool
+
+-- Get the computed values for these nodes after performing layout. If they were
+-- set using point values then the returned value will be the same as
+-- YGNodeStyleGetXXX. However if they were set using a percentage value then the
+-- returned value is the computed value used during layout.
+#ccall YGNodeLayoutGetMargin, Ptr <YGNode> -> <YGEdge> -> IO CFloat
+#ccall YGNodeLayoutGetBorder, Ptr <YGNode> -> <YGEdge> -> IO CFloat
+#ccall YGNodeLayoutGetPadding, Ptr <YGNode> -> <YGEdge> -> IO CFloat
+
+-- #ccall YGConfigSetLogger, Ptr <YGConfig> -> <YGLogger> -> IO ()
+#ccall YGAssert, CBool -> CString -> IO ()
+#ccall YGAssertWithNode, Ptr <YGNode> -> CBool -> CString -> IO ()
+#ccall YGAssertWithConfig, Ptr <YGConfig> -> CBool -> CString -> IO ()
+-- Set this to number of pixels in 1 point to round calculation results If you
+-- want to avoid rounding - set PointScaleFactor to 0
+#ccall YGConfigSetPointScaleFactor, Ptr <YGConfig> -> CFloat -> IO ()
+#ccall YGConfigSetShouldDiffLayoutWithoutLegacyStretchBehaviour, Ptr <YGConfig> -> CBool -> IO ()
+-- Yoga previously had an error where containers would take the maximum space
+-- possible instead of the minimum like they are supposed to. In practice this
+-- resulted in implicit behaviour similar to align-self: stretch; Because this
+-- was such a long-standing bug we must allow legacy users to switch back to
+-- this behaviour.
+#ccall YGConfigSetUseLegacyStretchBehaviour, Ptr <YGConfig> -> CBool -> IO ()
+
+-- YGConfig
+#ccall YGConfigNew, IO (Ptr <YGConfig>)
+#ccall YGConfigFree, Ptr <YGConfig> -> IO ()
+#ccall YGConfigGetInstanceCount, IO CInt
+
+#ccall YGConfigSetExperimentalFeatureEnabled, Ptr <YGConfig> -> <YGExperimentalFeature> -> CBool -> IO ()
+-- Not actually exported..
+-- #ccall YGConfigIsExperimentalFeatureEnabled, Ptr <YGConfig> -> <YGExperimentalFeature> -> IO CBool
+
+-- Using the web defaults is the preferred configuration for new projects. Usage
+-- of non web defaults should be considered as legacy.
+#ccall YGConfigSetUseWebDefaults, Ptr <YGConfig> -> CBool -> IO ()
+#ccall YGConfigGetUseWebDefaults, Ptr <YGConfig> -> IO CBool
+
+#ccall YGConfigSetCloneNodeFunc, Ptr <YGConfig> -> <YGCloneNodeFunc> -> IO ()
+
+-- Export only for C#
+#ccall YGConfigGetDefault, IO (Ptr <YGConfig>)
+
+#ccall YGConfigSetContext, Ptr <YGConfig> -> Ptr () -> IO ()
+#ccall YGConfigGetContext, Ptr <YGConfig> -> IO (Ptr ())
+
+#ccall YGRoundValueToPixelGrid, CDouble -> CDouble -> CBool -> CBool -> IO CFloat
