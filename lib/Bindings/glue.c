@@ -1,5 +1,6 @@
 #include <Yoga.h>
 
+#include <stdlib.h>
 #include <string.h>
 
 inline YGValue* YGValueCopy(YGValue value) {

@@ -18,6 +18,7 @@ library.
 
 Full documentation can be found at <http://facebook.github.io/yoga>
 -}
+{-# LANGUAGE TupleSections #-}
 module Yoga (
   -- ** Main datatype
   Layout,
@@ -105,8 +106,8 @@ instance Functor Layout where
   fmap f (Leaf x) = Leaf (f x)
 
 instance Foldable Layout where
-  foldMap f (Root x cs _) = f x `mappend` (foldMap (foldMap f) cs)
-  foldMap f (Container x cs) = f x `mappend` (foldMap (foldMap f) cs)
+  foldMap f (Root x cs _) = f x `mappend` foldMap (foldMap f) cs
+  foldMap f (Container x cs) = f x `mappend` foldMap (foldMap f) cs
   foldMap f (Leaf x) = f x
 
   foldl f z (Root x cs _) = foldl (foldl f) (f z x) cs
@@ -119,15 +120,15 @@ instance Foldable Layout where
 
 instance Traversable Layout where
   traverse f (Root x cs ptr) =
-    Root <$> f x <*> (sequenceA $ traverse f <$> cs) <*> pure ptr
+    Root <$> f x <*> sequenceA (traverse f <$> cs) <*> pure ptr
   traverse f (Container x cs) =
-    Container <$> f x <*> (sequenceA $ traverse f <$> cs)
+    Container <$> f x <*> sequenceA (traverse f <$> cs)
   traverse f (Leaf x) = Leaf <$> f x
 
   sequenceA (Root x cs ptr) =
-    Root <$> x <*> sequenceA (sequenceA <$> cs) <*> pure ptr
+    Root <$> x <*> traverse sequenceA cs <*> pure ptr
   sequenceA (Container x cs) =
-    Container <$> x <*> sequenceA (sequenceA <$> cs)
+    Container <$> x <*> traverse sequenceA cs
   sequenceA (Leaf x) = Leaf <$> x
 
 mkNode :: a -> IO (Layout a)
@@ -171,7 +172,7 @@ justifiedContainer just cs x = do
   c'YGNodeStyleSetJustifyContent ptr just
   c'YGNodeStyleSetFlexWrap ptr c'YGWrapNoWrap
 
-  cs' <- flip mapM (zip cs [0..]) $ \((Root p children fptr), idx) -> do
+  cs' <- forM (zip cs [0..]) $ \(Root p children fptr, idx) -> do
     withForeignPtr fptr $ \oldptr -> do
       newptr <- c'YGNodeClone oldptr
       c'YGNodeInsertChild ptr newptr idx
@@ -458,23 +459,23 @@ renderNodeWithChildren :: (Functor m, Applicative m, Monad m, Monoid b) =>
                           -> RenderFn m a (b, c)
                           -> m (b, c, [Layout c])
 renderNodeWithChildren parentInfo x children ptr f = do
-  info <- return $ unsafePerformIO $ layoutInfo ptr
-  let thisInfo = layoutWithParent parentInfo info
+  let info = unsafePerformIO $ layoutInfo ptr
+      thisInfo = layoutWithParent parentInfo info
   (m, y) <- f thisInfo x
-  cs <- flip mapM (zip children [0..]) $ \(child, childIdx) -> do
-    childPtr <- return $ unsafePerformIO $ c'YGNodeGetChild ptr childIdx
+  cs <- forM (zip children [0..]) $ \(child, childIdx) -> do
+    let childPtr = unsafePerformIO $ c'YGNodeGetChild ptr childIdx
     foldRenderTree thisInfo child childPtr f
-  return (mappend m . foldr mappend mempty . map fst $ cs, y, map snd cs)
+  return (mappend m . foldr (mappend . fst) mempty $ cs, y, map snd cs)
 
 foldRenderTree :: (Functor m, Applicative m, Monad m, Monoid b) =>
                   LayoutInfo -> Layout a -> Ptr C'YGNode -> RenderFn m a (b, c) ->
                   m (b, Layout c)
 foldRenderTree parentInfo (Root x children fptr) ptr f = do
   (result, y, cs) <- renderNodeWithChildren parentInfo x children ptr f
-  return $ (result, Root y cs fptr)
+  return (result, Root y cs fptr)
 foldRenderTree parentInfo (Container x children) ptr f = do
   (result, y, cs) <- renderNodeWithChildren parentInfo x children ptr f
-  return $ (result, Container y cs)
+  return (result, Container y cs)
 foldRenderTree parentInfo (Leaf x) ptr f = do
   (result, y, cs) <- renderNodeWithChildren parentInfo x [] ptr f
   return $ cs `seq` (result, Leaf y)
@@ -486,11 +487,11 @@ foldRenderTree parentInfo (Leaf x) ptr f = do
 -- a new layout with payloads of type 'c'.
 foldRender :: (Functor m, Applicative m, Monad m, Monoid b) =>
               Layout a -> RenderFn m a (b, c) -> m (b, Layout c)
-foldRender lyt@(Root _ _ fptr) f = do
-  rootPtr <- return $ unsafePerformIO $ withForeignPtr fptr $ \ptr -> do
-    calculateLayout ptr
-    return ptr
-  foldRenderTree emptyInfo lyt rootPtr f
+foldRender lyt@(Root _ _ fptr) f = 
+  let rootPtr = unsafePerformIO $ withForeignPtr fptr $ \ptr -> do
+        calculateLayout ptr
+        return ptr
+   in foldRenderTree emptyInfo lyt rootPtr f
 foldRender _ _ = error "Internal: Rendering must be done from the root node"
 
 -- | Renders a layout with the user-supplied function. The renderer traverses
@@ -499,5 +500,5 @@ foldRender _ _ = error "Internal: Rendering must be done from the root node"
 render :: (Functor m, Applicative m, Monad m) =>
           Layout a -> RenderFn m a b -> m (Layout b)
 render lyt f =
-  let f' lytInfo x = ((,) ()) <$> f lytInfo x
+  let f' lytInfo x = (() ,) <$> f lytInfo x
   in snd <$> foldRender lyt f'

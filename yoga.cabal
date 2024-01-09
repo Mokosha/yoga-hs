@@ -3,7 +3,7 @@ cabal-version:       2.2
 -- see http://haskell.org/cabal/users-guide/
 
 name:                yoga
-version:             0.0.0.6
+version:             0.0.0.7
 synopsis:            Bindings to Facebook's Yoga layout library
 description:         The <https://facebook.github.com/yoga Yoga> library from
                      <https://facebook.github.com/ Facebook> is a fast layout engine
@@ -46,44 +46,36 @@ library
   build-tool-depends: hsc2hs:hsc2hs >= 0.68
   include-dirs:       yoga/
                     , yoga/yoga/
-  install-includes:   YGConfig.h
-                      YGFloatOptional.h
-                      YGMacros.h
-                      YGNodePrint.h
-                      event/event.h
-                      internal/experiments-inl.h
-                      internal/experiments.h
-                      log.h
-                      CompactValue.h
-                      Utils.h
-                      YGEnums.h
-                      YGLayout.h
-                      YGNode.h
-                      YGStyle.h
-                      YGValue.h
-                      Yoga-internal.h
-                      Yoga.h 
+  install-includes:   Yoga.h 
 
   c-sources:          lib/Bindings/glue.c
   cxx-sources:        yoga/yoga/YGConfig.cpp
-                      yoga/yoga/YGLayout.cpp
-                      yoga/yoga/YGStyle.cpp
-                      yoga/yoga/YGValue.cpp
-                      yoga/yoga/event/event.cpp
-                      yoga/yoga/internal/experiments.cpp
-                      yoga/yoga/Utils.cpp
                       yoga/yoga/YGEnums.cpp
                       yoga/yoga/YGNode.cpp
-                      yoga/yoga/YGNodePrint.cpp
-                      yoga/yoga/Yoga.cpp
-                      yoga/yoga/log.cpp
+                      yoga/yoga/YGNodeLayout.cpp
+                      yoga/yoga/YGNodeStyle.cpp
+                      yoga/yoga/YGPixelGrid.cpp
+                      yoga/yoga/YGValue.cpp
+                      yoga/yoga/algorithm/AbsoluteLayout.cpp
+                      yoga/yoga/algorithm/Baseline.cpp
+                      yoga/yoga/algorithm/Cache.cpp
+                      yoga/yoga/algorithm/CalculateLayout.cpp
+                      yoga/yoga/algorithm/FlexLine.cpp
+                      yoga/yoga/algorithm/PixelGrid.cpp
+                      yoga/yoga/config/Config.cpp
+                      yoga/yoga/debug/AssertFatal.cpp
+                      yoga/yoga/debug/Log.cpp
+                      yoga/yoga/debug/NodeToString.cpp
+                      yoga/yoga/event/event.cpp
+                      yoga/yoga/node/LayoutResults.cpp
+                      yoga/yoga/node/Node.cpp
 
   cxx-options:        -fno-omit-frame-pointer
                       -fexceptions
                       -fvisibility=hidden
                       -ffunction-sections
                       -fdata-sections
-                      -std=c++11
+                      -std=c++20
                       -DYG_ENABLE_EVENTS
 
   extra-libraries:    stdc++

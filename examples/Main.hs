@@ -1,7 +1,7 @@
 module Main where
 
 --------------------------------------------------------------------------------
-import qualified Yoga as Yoga
+import qualified Yoga
 --------------------------------------------------------------------------------
 
 block :: Int -> Yoga.Layout Int
@@ -16,7 +16,7 @@ renderIntFn info x = do
 main :: IO ()
 main = do
   let cs = [ block y | y <- [6..9]]
-      cs2 = take 4 $ repeat $ Yoga.withPadding Yoga.Edge'Left 10.0 block 23
+      cs2 = replicate 4 $ Yoga.withPadding Yoga.Edge'Left 10.0 block 23
       mkHbox = Yoga.hbox . Yoga.startToEnd
   let tree =
         flip Yoga.vbox 3 $

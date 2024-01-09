@@ -13,7 +13,6 @@ module Bindings.Yoga where
 import Data.Data        (Data)
 import Data.Typeable    (Typeable)
 import Foreign.C.Types  (CFloat(..), CInt(..), CUInt(..), CBool(..), CDouble(..))
-import Foreign.C.String (CString)
 import Foreign.Ptr      (FunPtr, Ptr, plusPtr)
 import Foreign.Storable (Storable(..))
 
@@ -50,8 +49,7 @@ deriving instance Typeable C'YGValue
 #callback_t YGMeasureFunc, Ptr <YGNode> -> CFloat -> <YGMeasureMode> -> CFloat -> <YGMeasureMode> -> IO (Ptr <YGSize>)
 #callback_t YGBaselineFunc, Ptr <YGNode> -> CFloat -> CFloat -> IO CFloat
 #callback_t YGDirtiedFunc, Ptr <YGNode> -> IO ()
-#callback_t YGPrintFunc, Ptr <YGNode> -> IO ()
-#callback_t YGNodeCleanupFunc, Ptr <YGNode> -> IO ()
+-- #callback_t YGPrintFunc, Ptr <YGNode> -> IO ()
 -- #callback_t YGLogger, Ptr <YGConfig> -> Ptr <YGNode> -> <YGLogLevel> -> CString -> <va_list> -> IO CInt
 #callback_t YGCloneNodeFunc, Ptr <YGNode> -> Ptr <YGNode> -> CInt -> IO (Ptr <YGNode>)
 
@@ -59,9 +57,23 @@ deriving instance Typeable C'YGValue
 #ccall YGNodeNewWithConfig, Ptr <YGConfig> -> IO (Ptr <YGNode>)
 #ccall YGNodeClone, Ptr <YGNode> -> IO (Ptr <YGNode>)
 #ccall YGNodeFree, Ptr <YGNode> -> IO ()
-#ccall YGNodeFreeRecursiveWithCleanupFunc, Ptr <YGNode> -> <YGNodeCleanupFunc> -> IO ()
 #ccall YGNodeFreeRecursive, Ptr <YGNode> -> IO ()
+#ccall YGNodeFinalize, Ptr <YGNode> -> IO ()
 #ccall YGNodeReset, Ptr <YGNode> -> IO ()
+
+#ccall YGNodeGetHasNewLayout, Ptr <YGNode> -> IO CBool
+#ccall YGNodeSetHasNewLayout, Ptr <YGNode> -> CBool -> IO ()
+
+-- Mark a node as dirty. Only valid for nodes with a custom measure function
+-- set.
+-- YG knows when to mark all other nodes as dirty but because nodes with
+-- measure functions
+-- depends on information not known to YG they must perform this dirty
+-- marking manually.
+#ccall YGNodeMarkDirty, Ptr <YGNode> -> IO ()
+#ccall YGNodeIsDirty, Ptr <YGNode> -> IO CBool
+#ccall YGNodeGetDirtiedFunc, Ptr <YGNode> -> IO <YGDirtiedFunc>
+#ccall YGNodeSetDirtiedFunc, Ptr <YGNode> -> <YGDirtiedFunc> -> IO ()
 
 #ccall YGNodeInsertChild, Ptr <YGNode> -> Ptr <YGNode> -> CUInt -> IO ()
 #ccall YGNodeSwapChild, Ptr <YGNode> -> Ptr <YGNode> -> CUInt -> IO ()
@@ -74,54 +86,34 @@ deriving instance Typeable C'YGValue
 #ccall YGNodeGetChildCount, Ptr <YGNode> -> IO CUInt
 #ccall YGNodeSetChildren, Ptr <YGNode> -> Ptr (Ptr <YGNode>) -> CUInt -> IO ()
 
-#ccall YGNodeSetIsReferenceBaseline, Ptr <YGNode> -> CBool -> IO ()
-#ccall YGNodeIsReferenceBaseline, Ptr <YGNode> -> IO CBool
-
-#ccall YGNodeCalculateLayout, Ptr <YGNode> -> CFloat -> CFloat -> <YGDirection> -> IO ()
-
-
--- Mark a node as dirty. Only valid for nodes with a custom measure function
--- set.
--- YG knows when to mark all other nodes as dirty but because nodes with
--- measure functions
--- depends on information not known to YG they must perform this dirty
--- marking manually.
-#ccall YGNodeMarkDirty, Ptr <YGNode> -> IO ()
-
--- Marks the current node and all its descendants as dirty.
---
--- Intended to be used for Yoga benchmarks. Don't use in production, as calling
--- `YGCalculateLayout` will cause the recalculation of each and every node.
-#ccall YGNodeMarkDirtyAndPropogateToDescendants, Ptr <YGNode> -> IO ()
-
--- ifdef DEBUG only
--- #ccall YGNodePrint, Ptr <YGNode> -> <YGPrintOptions> -> IO ()
-
-#ccall YGFloatIsUndefined, CFloat -> IO CBool
-
-#ccall YGNodeCanUseCachedMeasurement, \
-    <YGMeasureMode> -> CFloat -> <YGMeasureMode> -> CFloat -> \
-    <YGMeasureMode> -> CFloat -> <YGMeasureMode> -> CFloat -> \
-    CFloat -> CFloat -> CFloat -> CFloat -> Ptr <YGConfig> -> IO CBool
-
-#ccall YGNodeCopyStyle, Ptr <YGNode> -> Ptr <YGNode> -> IO ()
+#ccall YGNodeSetConfig, Ptr <YGNode> -> Ptr <YGConfig> -> IO ()
+#ccall YGNodeGetConfig, Ptr <YGNode> -> IO (Ptr <YGConfig>)
 
 #ccall YGNodeSetContext, Ptr <YGNode> -> Ptr () -> IO ()
 #ccall YGNodeGetContext, Ptr <YGNode> -> IO (Ptr ())
-#ccall YGConfigSetPrintTreeFlag, Ptr <YGConfig> -> CBool -> IO ()
+
 #ccall YGNodeHasMeasureFunc, Ptr <YGNode> -> IO CBool
 #ccall YGNodeSetMeasureFunc, Ptr <YGNode> -> Ptr <YGMeasureFunc> -> IO ()
+
 #ccall YGNodeHasBaselineFunc, Ptr <YGNode> -> IO CBool
 #ccall YGNodeSetBaselineFunc, Ptr <YGNode> -> <YGBaselineFunc> -> IO ()
-#ccall YGNodeGetDirtiedFunc, Ptr <YGNode> -> IO <YGDirtiedFunc>
-#ccall YGNodeSetDirtiedFunc, Ptr <YGNode> -> <YGDirtiedFunc> -> IO ()
-#ccall YGNodeSetPrintFunc, Ptr <YGNode> -> Ptr <YGPrintFunc> -> IO ()
-#ccall YGNodeGetHasNewLayout, Ptr <YGNode> -> IO CBool
-#ccall YGNodeSetHasNewLayout, Ptr <YGNode> -> CBool -> IO ()
+#ccall YGNodeSetIsReferenceBaseline, Ptr <YGNode> -> CBool -> IO ()
+#ccall YGNodeIsReferenceBaseline, Ptr <YGNode> -> IO CBool
+
 #ccall YGNodeGetNodeType, Ptr <YGNode> -> IO <YGNodeType>
 #ccall YGNodeSetNodeType, Ptr <YGNode> -> <YGNodeType> -> IO ()
-#ccall YGNodeIsDirty, Ptr <YGNode> -> IO CBool
-#ccall YGNodeLayoutGetDidUseLegacyFlag, Ptr <YGNode> -> IO CBool
+
+-- #indef NDEBUG
+-- #ccall YGNodeSetPrintFunc, Ptr <YGNode> -> Ptr <YGPrintFunc> -> IO ()
+-- #ccall YGNodePrint, Ptr <YGNode> -> <YGPrintOptions> -> IO ()
+
+#ccall YGNodeSetAlwaysFormsContainingBlock, Ptr <YGNode> -> CBool -> IO ()
+
+#ccall YGNodeCalculateLayout, Ptr <YGNode> -> CFloat -> CFloat -> <YGDirection> -> IO ()
+
+#ccall YGFloatIsUndefined, CFloat -> IO CBool
+
+#ccall YGNodeCopyStyle, Ptr <YGNode> -> Ptr <YGNode> -> IO ()
 
 #ccall YGNodeStyleSetDirection, Ptr <YGNode> -> <YGDirection> -> IO ()
 #ccall YGNodeStyleGetDirection, Ptr <YGNode> -> IO <YGDirection>
@@ -248,7 +240,6 @@ deriving instance Typeable C'YGValue
 #ccall YGNodeLayoutGetHeight, Ptr <YGNode> -> IO CFloat
 #ccall YGNodeLayoutGetDirection, Ptr <YGNode> -> IO <YGDirection>
 #ccall YGNodeLayoutGetHadOverflow, Ptr <YGNode> -> IO CBool
-#ccall YGNodeLayoutGetDidLegacyStretchFlagAffectLayout, Ptr <YGNode> -> IO CBool
 
 -- Get the computed values for these nodes after performing layout. If they were
 -- set using point values then the returned value will be the same as
@@ -258,39 +249,29 @@ deriving instance Typeable C'YGValue
 #ccall YGNodeLayoutGetBorder, Ptr <YGNode> -> <YGEdge> -> IO CFloat
 #ccall YGNodeLayoutGetPadding, Ptr <YGNode> -> <YGEdge> -> IO CFloat
 
--- #ccall YGConfigSetLogger, Ptr <YGConfig> -> <YGLogger> -> IO ()
-#ccall YGAssert, CBool -> CString -> IO ()
-#ccall YGAssertWithNode, Ptr <YGNode> -> CBool -> CString -> IO ()
-#ccall YGAssertWithConfig, Ptr <YGConfig> -> CBool -> CString -> IO ()
--- Set this to number of pixels in 1 point to round calculation results If you
--- want to avoid rounding - set PointScaleFactor to 0
-#ccall YGConfigSetPointScaleFactor, Ptr <YGConfig> -> CFloat -> IO ()
-#ccall YGConfigSetShouldDiffLayoutWithoutLegacyStretchBehaviour, Ptr <YGConfig> -> CBool -> IO ()
--- Yoga previously had an error where containers would take the maximum space
--- possible instead of the minimum like they are supposed to. In practice this
--- resulted in implicit behaviour similar to align-self: stretch; Because this
--- was such a long-standing bug we must allow legacy users to switch back to
--- this behaviour.
-#ccall YGConfigSetUseLegacyStretchBehaviour, Ptr <YGConfig> -> CBool -> IO ()
-
 -- YGConfig
 #ccall YGConfigNew, IO (Ptr <YGConfig>)
 #ccall YGConfigFree, Ptr <YGConfig> -> IO ()
-#ccall YGConfigGetInstanceCount, IO CInt
+#ccall YGConfigGetDefault, IO (Ptr <YGConfig>)
 
 #ccall YGConfigSetExperimentalFeatureEnabled, Ptr <YGConfig> -> <YGExperimentalFeature> -> CBool -> IO ()
--- Not actually exported..
--- #ccall YGConfigIsExperimentalFeatureEnabled, Ptr <YGConfig> -> <YGExperimentalFeature> -> IO CBool
+#ccall YGConfigIsExperimentalFeatureEnabled, Ptr <YGConfig> -> <YGExperimentalFeature> -> IO CBool
 
 -- Using the web defaults is the preferred configuration for new projects. Usage
 -- of non web defaults should be considered as legacy.
 #ccall YGConfigSetUseWebDefaults, Ptr <YGConfig> -> CBool -> IO ()
 #ccall YGConfigGetUseWebDefaults, Ptr <YGConfig> -> IO CBool
 
-#ccall YGConfigSetCloneNodeFunc, Ptr <YGConfig> -> <YGCloneNodeFunc> -> IO ()
+-- Set this to number of pixels in 1 point to round calculation results If you
+-- want to avoid rounding - set PointScaleFactor to 0
+#ccall YGConfigSetPointScaleFactor, Ptr <YGConfig> -> CFloat -> IO ()
+#ccall YGConfigGetPointScaleFactor, Ptr <YGConfig> -> IO CFloat
 
--- Export only for C#
-#ccall YGConfigGetDefault, IO (Ptr <YGConfig>)
+#ccall YGConfigSetErrata, Ptr <YGConfig> -> <YGErrata> -> IO ()
+#ccall YGConfigGetErrata, Ptr <YGConfig> -> IO <YGErrata>
+
+#ccall YGConfigSetCloneNodeFunc, Ptr <YGConfig> -> <YGCloneNodeFunc> -> IO ()
+#ccall YGConfigSetPrintTreeFlag, Ptr <YGConfig> -> CBool -> IO ()
 
 #ccall YGConfigSetContext, Ptr <YGConfig> -> Ptr () -> IO ()
 #ccall YGConfigGetContext, Ptr <YGConfig> -> IO (Ptr ())
