@@ -179,6 +179,9 @@ deriving instance Typeable C'YGValue
 #ccall YGNodeStyleSetBorder, Ptr <YGNode> -> <YGEdge> -> CFloat -> IO ()
 #ccall YGNodeStyleGetBorder, Ptr <YGNode> -> <YGEdge> -> IO CFloat
 
+#ccall YGNodeStyleSetGap, Ptr <YGNode> -> <YGGutter> -> CFloat -> IO ()
+#ccall YGNodeStyleGetGap, Ptr <YGNode> -> <YGGutter> -> IO CFloat
+
 #ccall YGNodeStyleSetWidth, Ptr <YGNode> -> CFloat -> IO ()
 #ccall YGNodeStyleSetWidthPercent, Ptr <YGNode> -> CFloat -> IO ()
 #ccall YGNodeStyleSetWidthAuto, Ptr <YGNode> -> IO ()

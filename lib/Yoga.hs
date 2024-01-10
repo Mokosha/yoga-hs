@@ -39,8 +39,8 @@ module Yoga (
   shrinkable, growable, exact, withDimensions,
 
   -- ** Attributes
-  Edge(..),
-  stretched, setMargin, setPadding,
+  Edge(..), Gutter(..),
+  stretched, setMargin, setPadding, setBorder, setGap,
 
   -- ** Rendering
   LayoutInfo(..), RenderFn, render, foldRender,
@@ -340,8 +340,7 @@ stretched lyt = Layout $ do
   return node
 
 -- | Edges are used to describe the direction from which we want to alter an
--- attribute of a node. They are currently only being used with 'setMargin' and
--- 'setPadding'.
+-- attribute of a node.
 data Edge
   = Edge'Left
   | Edge'Top
@@ -354,42 +353,67 @@ data Edge
   | Edge'All
   deriving (Eq, Ord, Bounded, Enum, Read, Show)
 
-setMargin' :: CUInt -> Float -> Layout a -> Layout a
-setMargin' edge px lyt = Layout $ do
-  node <- generateLayout lyt
-  withNativePtr node $ \ptr -> c'YGNodeStyleSetMargin ptr edge $ realToFrac px
-  return node
+edgeToCEdge :: Edge -> CUInt
+edgeToCEdge Edge'Left = c'YGEdgeLeft
+edgeToCEdge Edge'Top = c'YGEdgeTop
+edgeToCEdge Edge'Right = c'YGEdgeRight
+edgeToCEdge Edge'Bottom = c'YGEdgeBottom
+edgeToCEdge Edge'Start = c'YGEdgeStart
+edgeToCEdge Edge'End = c'YGEdgeEnd
+edgeToCEdge Edge'Horizontal = c'YGEdgeHorizontal
+edgeToCEdge Edge'Vertical = c'YGEdgeVertical
+edgeToCEdge Edge'All = c'YGEdgeAll
 
 -- | Overrides the margin for a layout with the given margin.
 setMargin :: Edge -> Float -> Layout a -> Layout a
-setMargin Edge'Left = setMargin' c'YGEdgeLeft
-setMargin Edge'Top = setMargin' c'YGEdgeTop
-setMargin Edge'Right = setMargin' c'YGEdgeRight
-setMargin Edge'Bottom = setMargin' c'YGEdgeBottom
-setMargin Edge'Start = setMargin' c'YGEdgeStart
-setMargin Edge'End = setMargin' c'YGEdgeEnd
-setMargin Edge'Horizontal = setMargin' c'YGEdgeHorizontal
-setMargin Edge'Vertical = setMargin' c'YGEdgeVertical
-setMargin Edge'All = setMargin' c'YGEdgeAll
-
-setPadding' :: CUInt -> Float -> Layout a -> Layout a
-setPadding' edge px lyt = Layout $ do
-  node <- generateLayout lyt
-  withNativePtr node $ \ptr ->
-    c'YGNodeStyleSetPadding ptr edge $ realToFrac px
-  return node
+setMargin = setMargin' . edgeToCEdge
+  where
+    setMargin' edge px lyt = Layout $ do
+      node <- generateLayout lyt
+      withNativePtr node $ \ptr ->
+          c'YGNodeStyleSetMargin ptr edge $ realToFrac px
+      return node
 
 -- | Overrides the padding for a layout with the given padding.
 setPadding :: Edge -> Float -> Layout a -> Layout a
-setPadding Edge'Left = setPadding' c'YGEdgeLeft
-setPadding Edge'Top = setPadding' c'YGEdgeTop
-setPadding Edge'Right = setPadding' c'YGEdgeRight
-setPadding Edge'Bottom = setPadding' c'YGEdgeBottom
-setPadding Edge'Start = setPadding' c'YGEdgeStart
-setPadding Edge'End = setPadding' c'YGEdgeEnd
-setPadding Edge'Horizontal = setPadding' c'YGEdgeHorizontal
-setPadding Edge'Vertical = setPadding' c'YGEdgeVertical
-setPadding Edge'All = setPadding' c'YGEdgeAll
+setPadding = setPadding' . edgeToCEdge
+  where
+    setPadding' edge px lyt = Layout $ do
+      node <- generateLayout lyt
+      withNativePtr node $ \ptr ->
+        c'YGNodeStyleSetPadding ptr edge $ realToFrac px
+      return node
+
+-- | Overrides the border for a layout with the given border.
+setBorder :: Edge -> Float -> Layout a -> Layout a
+setBorder = setBorder' . edgeToCEdge
+  where
+    setBorder' edge px lyt = Layout $ do
+      node <- generateLayout lyt
+      withNativePtr node $ \ptr ->
+        c'YGNodeStyleSetBorder ptr edge $ realToFrac px
+      return node
+
+-- | Gutters are used to denote the size of a gap between elements.
+data Gutter
+  = Gutter'Column
+  | Gutter'Row
+  | Gutter'All
+  deriving (Eq, Ord, Bounded, Enum, Read, Show)
+
+-- | Overrides the gaps for a layout with the given gap size.
+setGap :: Gutter -> Float -> Layout a -> Layout a
+setGap = setGap' . gapToCGap
+  where
+    gapToCGap Gutter'Column = c'YGGutterColumn
+    gapToCGap Gutter'Row = c'YGGutterRow
+    gapToCGap Gutter'All = c'YGGutterAll
+
+    setGap' gutter px lyt = Layout $ do
+      node <- generateLayout lyt
+      withNativePtr node $ \ptr ->
+        c'YGNodeStyleSetGap ptr gutter $ realToFrac px
+      return node
 
 --------------------------------------------------------------------------------
 -- Rendering
