@@ -63,8 +63,6 @@ import Foreign.ForeignPtr
 
 import GHC.Ptr (Ptr)
 
-import Numeric.IEEE
-
 -- Last to avoid compiler warnings due to the Foldable/Traversable Proposal
 import Prelude hiding (foldl, foldr, mapM)
 --------------------------------------------------------------------------------
@@ -446,8 +444,8 @@ type RenderFn m a b = LayoutInfo -> a -> m b
 
 calculateLayout :: Ptr C'YGNode -> IO ()
 calculateLayout ptr =
-  let n = (nan :: CFloat)
-  in c'YGNodeStyleGetDirection ptr >>= c'YGNodeCalculateLayout ptr n n
+  let nan = (0 :: CFloat) / (0 :: CFloat)
+  in c'YGNodeStyleGetDirection ptr >>= c'YGNodeCalculateLayout ptr nan nan
 
 layoutInfo :: Ptr C'YGNode -> IO LayoutInfo
 layoutInfo ptr = do
