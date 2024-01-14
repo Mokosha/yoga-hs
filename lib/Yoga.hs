@@ -172,12 +172,12 @@ justifiedContainer just cs x = Layout $ do
   c'YGNodeStyleSetJustifyContent ptr just
   c'YGNodeStyleSetFlexWrap ptr c'YGWrapNoWrap
 
-  cs' <- forM cs $ \node -> do
+  cs' <- forM (zip [0..] cs) $ \(idx, node) -> do
     nodeTree <- generateLayout node
     case nodeTree of
       Root p children fptr -> withForeignPtr fptr $ \oldptr -> do
         newptr <- c'YGNodeClone oldptr
-        c'YGNodeInsertChild ptr newptr 0
+        c'YGNodeInsertChild ptr newptr idx
         return $ if null children
                  then Leaf p
                  else Container p children
