@@ -39,8 +39,8 @@ module Yoga (
   shrinkable, growable, exact, withDimensions,
 
   -- ** Attributes
-  Edge(..), Gutter(..),
-  stretched, setMargin, setPadding, setBorder, setGap,
+  Edge(..), Gutter(..), Align(..),
+  stretched, setMargin, setPadding, setBorder, setGap, setAlignItems,
 
   -- ** Rendering
   LayoutInfo(..), RenderFn, render, foldRender,
@@ -411,6 +411,37 @@ setGap = setGap' . gapToCGap
       node <- generateLayout lyt
       withNativePtr node $ \ptr ->
         c'YGNodeStyleSetGap ptr gutter $ realToFrac px
+      return node
+
+-- | Aligns describe how items are positioned relative to the container.
+data Align
+  = Align'Auto
+  | Align'FlexStart
+  | Align'Center
+  | Align'FlexEnd
+  | Align'Stretch
+  | Align'Baseline
+  | Align'SpaceBetween
+  | Align'SpaceAround
+  deriving (Eq, Ord, Bounded, Enum, Read, Show)
+
+-- | Align items along the cross axis (not the main axis) of a container.
+setAlignItems :: Align -> Layout a -> Layout a
+setAlignItems = setAlign' . alignToCAlign
+  where
+    alignToCAlign Align'Auto = c'YGAlignAuto
+    alignToCAlign Align'FlexStart = c'YGAlignFlexStart
+    alignToCAlign Align'Center = c'YGAlignCenter
+    alignToCAlign Align'FlexEnd = c'YGAlignFlexEnd
+    alignToCAlign Align'Stretch = c'YGAlignStretch
+    alignToCAlign Align'Baseline = c'YGAlignBaseline
+    alignToCAlign Align'SpaceBetween = c'YGAlignSpaceBetween
+    alignToCAlign Align'SpaceAround = c'YGAlignSpaceAround
+
+    setAlign' align lyt = Layout $ do
+      node <- generateLayout lyt
+      withNativePtr node $ \ptr ->
+        c'YGNodeStyleSetAlignItems ptr align
       return node
 
 --------------------------------------------------------------------------------
